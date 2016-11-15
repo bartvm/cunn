@@ -284,6 +284,24 @@ TH_API void THNN_(MultiMarginCriterion_updateGradInput)(
                   THCTensor *weights,       // [OPTIONAL]
                   real margin);
 
+TH_API void THNN_(MultiscaleLSTM_updateOutput)(
+                  THCState *state,
+                  THCTensor *input,
+                  THCIndexTensor *targets,
+                  THCIndexTensor *batchIndices,
+                  THCIndexTensor *numArcs, // numInputs
+                  THCTensor *divisors, // TODO This should be calculated instead of provided
+                  THCTensor *output,
+                  THCTensor *cellOutput,
+                  THCTensor *inputWeight,
+                  THCTensor *recurrentWeight,
+                  THCTensor *bias,
+                  THCTensor *xW,
+                  THCTensor *hR,
+                  THCTensor *gates,
+                  THCTensor *outputGates,
+                  int batchSize);
+
 TH_API void THNN_(PReLU_updateOutput)(
                   THCState *state,
                   THCTensor *input,
