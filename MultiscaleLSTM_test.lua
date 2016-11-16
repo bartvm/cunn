@@ -10,9 +10,16 @@ input = torch.CudaTensor{0.415958315, 0.692421913, 0.605638087, 0.71125555, 0.18
 targets = torch.CudaLongTensor{1, 2, 1, 2}
 batchIndices = torch.CudaLongTensor{0, 0, 1, 0}
 numArcs = torch.CudaLongTensor{3, 1}
-divisors = torch.CudaTensor{1, 1, 2, 0}
+divisors = torch.CudaTensor{1, 1, 2, 0}:resize(2, 2)
 
 m:updateOutput(input, targets, batchIndices, numArcs, divisors)
 
-print(m._xW)
-print(m._hR)
+print('inputWeight', m.inputWeight)
+print('recurrentWeight', m.recurrentWeight)
+print('bias', m.bias)
+print('xW', m._xW)
+print('hR', m._hR)
+print('output', m.output)
+print('cellOutput', m.cellOutput)
+print('gates', m._gates)
+print('outputGates', m._outputGates)
