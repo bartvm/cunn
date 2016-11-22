@@ -2,6 +2,15 @@
 #include "THCHalf.h"
 #include "THCHalfAutoNumerics.cuh"
 
+template <typename IndexT>
+__global__ void reverseArcs(int batchSize, int totalInputs,
+                            IndexT* targets, IndexT* targetBatches,
+                            IndexT* numInArcs) {
+  int index = blockIdx.x * blockDim.x + threadIdx.x;
+  if (index >= totalInputs) return;
+  atomicAdd(numInArcs + (targets[index] - 1) * batchSize + targetBatches[index], 1);
+}
+
 template <typename T>
 __forceinline__ __device__ T sigmoid(T in) {
   T one = ScalarConvert<float, T>::to(1.0);
@@ -57,6 +66,36 @@ __global__ void calculateState(int hiddenSize, int batchSize,
   outputGates[index] /= divisors[batch];
   output[index] = THCNumerics<T>::tanh(cellOutput[index]) * sigmoid<T>(outputGates[index]);
 }
+
+template <typename T>
+__global__ void calculateGradState(int hiddenSize, int batchSize,
+                                   T* cellOutput, T* gradCellOutput,
+                                   T* outputGates, T* gradOutputGates,
+                                   T* divisors, T* gradOutput) {
+  int index = blockIdx.x * blockDim.x + threadIdx.x;
+  if (index >= batchSize * hiddenSize) return;
+
+  int batch = index / hiddenSize;
+  // NOTE Tanh and sigmoid activations here are recalculated
+  T cellActivation = THCNumerics<T>::tanh(cellOutput[index]);
+  T outputGateActivation = sigmoid<T>(outputGates[index]);
+  gradCellOutput[index] = (1 - cellActivation * cellActivation) * gradOutput[index] * outputGateActivation;
+  gradOutputGates[index] = cellActivation * gradOutput[index] * outputGateActivation * (1 - outputGateActivation);
+  gradCellOutput[index] /= divisors[batch];
+  gradOutputGates[index] /= divisors[batch];
+}
+
+template <typename IndexT, typename T>
+__global__ void gradLstmElemwise(int t, int hiddenSize, int batchSize,
+                                 IndexT* targets, IndexT* batchIndices, int numArcs_t,
+                                 T* hR, T* xW, T* bias,
+                                 T* gates, T* gradGates,
+                                 T* cellOutput, T* gradCellOutput,
+                                 T* outputGates, T* gradOutputGates) {
+
+}
+
+
 
 #include "generic/MultiscaleLSTM.cu"
 #include "THCGenerateFloatTypes.h"

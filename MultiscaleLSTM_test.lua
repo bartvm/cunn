@@ -12,7 +12,8 @@ batchIndices = torch.CudaLongTensor{0, 0, 1, 0}
 numArcs = torch.CudaLongTensor{3, 1}
 divisors = torch.CudaTensor{1, 1, 2, 0}:resize(2, 2)
 
-m:updateOutput(input, targets, batchIndices, numArcs, divisors)
+m:updateOutput({input, targets, batchIndices, numArcs, divisors})
+m:updateGradInput({input, targets, batchIndices, numArcs, divisors}, torch.rand(3, 2, 2):cuda())
 
 print('inputWeight', m.inputWeight)
 print('recurrentWeight', m.recurrentWeight)
@@ -21,5 +22,7 @@ print('xW', m._xW)
 print('hR', m._hR)
 print('output', m.output)
 print('cellOutput', m.cellOutput)
+print('gradCellOutput', m.gradCellOutput)
 print('gates', m._gates)
 print('outputGates', m._outputGates)
+print('gradOutputGates', m._gradOutputGates)

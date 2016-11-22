@@ -302,6 +302,32 @@ TH_API void THNN_(MultiscaleLSTM_updateOutput)(
                   THCTensor *outputGates,
                   int batchSize);
 
+TH_API void THNN_(MultiscaleLSTM_updateGradInput)(
+                  THCState *state,
+                  // Inputs
+                  THCTensor *input,
+                  THCTensor *gradInput,
+                  THCIndexTensor *targets,
+                  THCIndexTensor *batchIndices,
+                  THCIndexTensor *numArcs, // numInputs
+                  THCTensor *divisors, // TODO This should be calculated instead of provided
+                  // Outputs
+                  THCTensor *output,
+                  THCTensor *gradOutput,
+                  THCTensor *cellOutput,
+                  THCTensor *gradCellOutput,
+                  // Parameters
+                  THCTensor *inputWeight,
+                  THCTensor *recurrentWeight,
+                  THCTensor *bias,
+                  // Buffers
+                  THCTensor *xW,
+                  THCTensor *hR,
+                  THCTensor *gates,
+                  THCTensor *outputGates,
+                  THCTensor *gradOutputGates,
+                  int batchSize);
+
 TH_API void THNN_(PReLU_updateOutput)(
                   THCState *state,
                   THCTensor *input,

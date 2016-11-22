@@ -151,4 +151,72 @@ void THNN_(MultiscaleLSTM_updateOutput)(
 
 }
 
+void THNN_(MultiscaleLSTM_updateGradInput)(
+          THCState *state,
+          // Inputs
+          THCTensor *input,
+          THCTensor *gradInput,
+          THCIndexTensor *targets,
+          THCIndexTensor *batchIndices,
+          THCIndexTensor *numArcs, // numInputs
+          THCTensor *divisors, // TODO This should be calculated instead of provided
+          // Outputs
+          THCTensor *output,
+          THCTensor *gradOutput,
+          THCTensor *cellOutput,
+          THCTensor *gradCellOutput,
+          // Parameters
+          THCTensor *inputWeight,
+          THCTensor *recurrentWeight,
+          THCTensor *bias,
+          // Buffers
+          THCTensor *xW,
+          THCTensor *hR,
+          THCTensor *gates,
+          THCTensor *gradGates,
+          THCTensor *outputGates,
+          THCTensor *gradOutputGates,
+          int batchSize)
+{
+  int seqLength = THCIndexTensor_(size)(state, numArcs, 0) + 1;
+  int totalInputs = THCTensor_(size)(state, input, 0);
+  int inputSize = THCTensor_(size)(state, input, 1);
+  int hiddenSize = THCTensor_(size)(state, recurrentWeight, 0);
+
+  THCTensor_(resizeAs)(state, gradInput, input);
+  THCTensor_(resizeAs)(state, gradGates, gates);
+  THCTensor_(resizeAs)(state, gradCellOutput, cellOutput);
+  THCTensor_(resizeAs)(state, gradOutputGates, outputGates);
+
+  THCTensor *gradOutput_t = THCTensor_(new)(state);
+  THCTensor *cellOutput_t = THCTensor_(new)(state);
+  THCTensor *gradCellOutput_t = THCTensor_(new)(state);
+  THCTensor *outputGates_t = THCTensor_(new)(state);
+  THCTensor *gradOutputGates_t = THCTensor_(new)(state);
+  THCTensor *divisors_t = THCTensor_(new)(state);
+
+  int nThreads;
+
+  for (int t = seqLength - 1; t > 0; t--) {
+    THCTensor_(select)(state, cellOutput_t, cellOutput, 0, t);
+    THCTensor_(select)(state, gradCellOutput_t, gradCellOutput, 0, t);
+    THCTensor_(select)(state, outputGates_t, outputGates, 0, t);
+    THCTensor_(select)(state, gradOutputGates_t, gradOutputGates, 0, t);
+    THCTensor_(select)(state, divisors_t, divisors, 0, t - 1);
+    THCTensor_(select)(state, gradOutput_t, gradOutput, 0, t);
+
+    nThreads = batchSize * hiddenSize;
+
+    calculateGradState<<<GET_BLOCKS(nThreads), CUDA_NUM_THREADS, 0, THCState_getCurrentStream(state)>>>(
+      hiddenSize, batchSize,
+      THCTensor_(data)(state, cellOutput_t),
+      THCTensor_(data)(state, gradCellOutput_t),
+      THCTensor_(data)(state, outputGates_t),
+      THCTensor_(data)(state, gradOutputGates_t),
+      THCTensor_(data)(state, divisors_t),
+      THCTensor_(data)(state, gradOutput_t)
+    );
+  }
+}
+
 #endif
