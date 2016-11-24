@@ -18,6 +18,9 @@ function MultiscaleLSTM:__init(batchSize, inputSize, hiddenSize)
   self._gates = torch.Tensor()
   self._outputGates = torch.Tensor()
 
+  self.numInArcs = torch.IntTensor()
+  self.numOutArcs = torch.IntTensor()
+
   -- Gradients
   self.gradCellOutput = torch.Tensor()
   self._gradOutputGates = torch.Tensor()
@@ -29,49 +32,61 @@ function MultiscaleLSTM:parameters()
 end
 
 function MultiscaleLSTM:updateOutput(input)
-  local input, targets, batchIndices, numArcs, divisors = table.unpack(input)
+  self.numInArcs = self.numInArcs:cudaInt()
+  self.numOutArcs = self.numOutArcs:cudaInt()
+  local input, targets, batches, origins = table.unpack(input)
   input.THNN.MultiscaleLSTM_updateOutput(
+    -- Inputs
     input:cdata(),
     targets:cdata(),
-    batchIndices:cdata(),
-    numArcs:cdata(),
-    divisors:cdata(),
+    batches:cdata(),
+    origins:cdata(),
+    -- Outputs
     self.output:cdata(),
     self.cellOutput:cdata(),
+    -- Parameters
     self.inputWeight:cdata(),
     self.recurrentWeight:cdata(),
     self.bias:cdata(),
+    -- Buffers
+    self.numInArcs:cdata(),
     self._xW:cdata(),
     self._hR:cdata(),
     self._gates:cdata(),
     self._outputGates:cdata(),
+    -- Config
     self.batchSize
    )
   return self.output
 end
 
 function MultiscaleLSTM:updateGradInput(input, gradOutput)
-  local input, targets, batchIndices, numArcs, divisors = table.unpack(input)
+  local input, targets, batches, origins = table.unpack(input)
   input.THNN.MultiscaleLSTM_updateGradInput(
+    -- Inputs
     input:cdata(),
     self.gradInput:cdata(),
     targets:cdata(),
-    batchIndices:cdata(),
-    numArcs:cdata(),
-    divisors:cdata(),
+    batches:cdata(),
+    origins:cdata(),
+    -- Outputs
     self.output:cdata(),
     gradOutput:cdata(),
     self.cellOutput:cdata(),
     self.gradCellOutput:cdata(),
+    -- Parameters
     self.inputWeight:cdata(),
     self.recurrentWeight:cdata(),
     self.bias:cdata(),
+    -- Buffers
+    self.numInArcs:cdata(),
     self._xW:cdata(),
     self._hR:cdata(),
     self._gates:cdata(),
     self._gradGates:cdata(),
     self._outputGates:cdata(),
     self._gradOutputGates:cdata(),
+    -- Config
     self.batchSize
   )
   return {self.gradInput, nil, nil, nil, nil}

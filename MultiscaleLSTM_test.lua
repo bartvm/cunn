@@ -7,13 +7,12 @@ m.bias:copy(torch.Tensor{0.715777934, 0.973472238, 0.17162253, 0.66155535, 0.124
 m = m:cuda()
 
 input = torch.CudaTensor{0.415958315, 0.692421913, 0.605638087, 0.71125555, 0.187767833, 0.777086318, 0.335184276, 0.0847264156, 0.637676537, 0.790640533, 0.252421021, 0.975926518}:resize(4, 3)
-targets = torch.CudaLongTensor{1, 2, 1, 2}
-batchIndices = torch.CudaLongTensor{0, 0, 1, 0}
-numArcs = torch.CudaLongTensor{3, 1}
-divisors = torch.CudaTensor{1, 1, 2, 0}:resize(2, 2)
+targets = torch.CudaIntTensor{2, 3, 2, 3}
+batches = torch.CudaIntTensor{1, 1, 2, 1}
+origins = torch.CudaIntTensor{1, 1, 1, 2}
 
-m:updateOutput({input, targets, batchIndices, numArcs, divisors})
-m:updateGradInput({input, targets, batchIndices, numArcs, divisors}, torch.rand(3, 2, 2):cuda())
+m:updateOutput({input, targets, batchIndices, origins})
+m:updateGradInput({input, targets, batchIndices, origins}, torch.rand(3, 2, 2):cuda())
 
 print('inputWeight', m.inputWeight)
 print('recurrentWeight', m.recurrentWeight)
@@ -26,3 +25,4 @@ print('gradCellOutput', m.gradCellOutput)
 print('gates', m._gates)
 print('outputGates', m._outputGates)
 print('gradOutputGates', m._gradOutputGates)
+print('numInArcs', m.numInArcs)
