@@ -285,57 +285,58 @@ TH_API void THNN_(MultiMarginCriterion_updateGradInput)(
                   real margin);
 
 TH_API void THNN_(MultiscaleLSTM_updateOutput)(
-                  THCState *state,
-                  // Inputs
-                  THCTensor *input,
-                  THCudaIntTensor *targets,
-                  THCudaIntTensor *targetBatches,
-                  THCudaIntTensor *targetSteps,  // Per time step
-                  // Outputs
-                  THCTensor *output,
-                  THCTensor *cellOutput,
-                  // Parameters
-                  THCTensor *inputWeight,
-                  THCTensor *recurrentWeight,
-                  THCTensor *bias,
-                  // Buffers
-                  THCudaIntTensor *numInArcs,  // Per time step and batch
-                  THCudaIntTensor *numOutArcs,  // Per time step and batch
-                  THCTensor *xW,
-                  THCTensor *hR,
-                  THCTensor *gates,
-                  THCTensor *outputGates,
-                  // Config
-                  int batchSize);
+          THCState *state,
+          // Inputs
+          THCTensor *input,
+          THCudaIntTensor *targets,
+          THCudaIntTensor *batches,
+          THCudaIntTensor *origins,
+          // Inputs
+          THCTensor *output,
+          THCTensor *cellOutput,
+          // Parameters
+          THCTensor *inputWeight,
+          THCTensor *recurrentWeight,
+          THCTensor *bias,
+          // Buffers
+          THCudaIntTensor *numOutArcs, // Per time step
+          THCudaIntTensor *numInArcs,  // Per time step
+          THCTensor *normalizingConstants,  // Incoming arcs per step and batch
+          THCTensor *xW,
+          THCTensor *hR,
+          THCTensor *gates,
+          THCTensor *outputGates,
+          // Config
+          int batchSize);
 
 TH_API void THNN_(MultiscaleLSTM_updateGradInput)(
-                  THCState *state,
-                  // Inputs
-                  THCTensor *input,
-                  THCTensor *gradInput,
-                  THCudaIntTensor *targets,
-                  THCudaIntTensor *batches,
-                  THCudaIntTensor *origins,
-                  // Outputs
-                  THCTensor *output,
-                  THCTensor *gradOutput,
-                  THCTensor *cellOutput,
-                  THCTensor *gradCellOutput,
-                  // Parameters
-                  THCTensor *inputWeight,
-                  THCTensor *recurrentWeight,
-                  THCTensor *bias,
-                  // Buffers
-                  THCudaIntTensor *numInArcs,
-                  THCudaIntTensor *numOutArcs,
-                  THCTensor *xW,
-                  THCTensor *hR,
-                  THCTensor *gates,
-                  THCTensor *gradGates,
-                  THCTensor *outputGates,
-                  THCTensor *gradOutputGates,
-                  // Config
-                  int batchSize);
+          THCState *state,
+          // Inputs
+          THCTensor *input,
+          THCTensor *gradInput,
+          THCudaIntTensor *targets,
+          THCudaIntTensor *batches,
+          THCudaIntTensor *origins,
+          // Inputs
+          THCTensor *output,
+          THCTensor *gradOutput,
+          THCTensor *cellOutput,
+          THCTensor *gradCellOutput,
+          // Parameters
+          THCTensor *inputWeight,
+          THCTensor *recurrentWeight,
+          THCTensor *bias,
+          // Buffers
+          THCudaIntTensor *numOutArcs,
+          THCudaIntTensor *numInArcs,
+          THCTensor *normalizingConstants,  // Incoming arcs per step and batch
+          THCTensor *xW,
+          THCTensor *hR,
+          THCTensor *gates,
+          THCTensor *gradGates,
+          THCTensor *outputGates,
+          THCTensor *gradOutputGates,
+          int batchSize);
 
 TH_API void THNN_(PReLU_updateOutput)(
                   THCState *state,

@@ -1,27 +1,32 @@
 #include "THCUNN.h"
 #include "THCHalf.h"
 #include "THCHalfAutoNumerics.cuh"
+#include "THCAtomics.cuh"  // For atomicAdd
 
 #include <thrust/device_ptr.h>
-#include <thrust/scan.h>
+#include <thrust/extrema.h>
+#include <thrust/sort.h>
+#include <thrust/tuple.h>
+#include <thrust/iterator/zip_iterator.h>
 
+template <typename T>
 __global__ void countArcs(int batchSize, int totalInputs,
-                          int* targets, int* targetBatches, int* targetSteps,
-                          int* numInArcs, int* numOutArcs) {
+                          int* targets, int* batches, int* origins,
+                          int* numInArcs, int* numOutArcs,
+                          T* normalizingConstants) {
   int index = blockIdx.x * blockDim.x + threadIdx.x;
   if (index >= totalInputs) return;
-  atomicAdd(numInArcs + (targets[index] - 2) * batchSize + targetBatches[index], 1);
-  atomicAdd(numOutArcs + (targetSteps[index] - 1), 1);
+  atomicAdd(normalizingConstants + (targets[index] - 1) * batchSize + batches[index], ScalarConvert<int,T>::to(1));
+  atomicAdd(numOutArcs + origins[index], 1);
+  atomicAdd(numInArcs + targets[index] - 1, 1);
 }
 
 __global__ void reverseArcs(int batchSize, int totalInputs, int seqLength,
-                            int* targets, int* targetBatches,
-                            int* origins, int* originBatches,
+                            int* targets, int* batches,
+                            int* origins,
                             int* offsets, int* arcCount) {
   int index = blockIdx.x * blockDim.x + threadIdx.x;
   if (index >= totalInputs) return;
-
-  int target = offsets[
 }
 
 template <typename T>
@@ -32,7 +37,7 @@ __forceinline__ __device__ T sigmoid(T in) {
 
 template <typename T>
 __global__ void lstmElemwise(int t, int hiddenSize, int batchSize,
-                             int* targets, int* targetBatches, int numOutArcs_t,
+                             int* targets, int* batches, int numOutArcs_t,
                              T* hR, T* xW, T* bias, T* gates,
                              T* cellOutput, T* outputGates) {
   int index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -41,7 +46,7 @@ __global__ void lstmElemwise(int t, int hiddenSize, int batchSize,
   int input = index / hiddenSize;
   int offset = index % hiddenSize;
   int inputIndex = offset + 4 * input * hiddenSize;
-  int hiddenIndex = offset + 4 * targetBatches[input] * hiddenSize;
+  int hiddenIndex = offset + 4 * batches[input] * hiddenSize;
 
   T g[4];
 
@@ -62,21 +67,22 @@ __global__ void lstmElemwise(int t, int hiddenSize, int batchSize,
   gates[3 * hiddenSize + inputIndex] = cell_gate;
 
   // Now distribute cell states and input gates to destinations
-  int originIndex = offset + t * batchSize * hiddenSize + targetBatches[input] * hiddenSize;
-  int destinationIndex = offset + targets[input] * batchSize * hiddenSize + targetBatches[input] * hiddenSize;
+  int originIndex = offset + t * batchSize * hiddenSize + batches[input] * hiddenSize;
+  int destinationIndex = offset + targets[input] * batchSize * hiddenSize + batches[input] * hiddenSize;
   cellOutput[destinationIndex] += (cellOutput[originIndex] * forget_gate) + (cell_gate * in_gate);
-  outputGates[destinationIndex] += out_gate;
+  outputGates[destinationIndex - batchSize * hiddenSize] += out_gate;
 }
 
 template <typename T>
 __global__ void calculateState(int hiddenSize, int batchSize,
-                               T* cellOutput, T* outputGates, int* numInArcs, T* output) {
+                               T* cellOutput, T* outputGates,
+                               T* normalizingConstants, T* output) {
   int index = blockIdx.x * blockDim.x + threadIdx.x;
   if (index >= batchSize * hiddenSize) return;
 
   int batch = index / hiddenSize;
-  cellOutput[index] /= ScalarConvert<int,T>::to(numInArcs[batch]);
-  outputGates[index] /= ScalarConvert<int,T>::to(numInArcs[batch]);
+  cellOutput[index] /= normalizingConstants[batch];
+  outputGates[index] /= normalizingConstants[batch];
   output[index] = THCNumerics<T>::tanh(cellOutput[index]) * sigmoid<T>(outputGates[index]);
 }
 
@@ -84,7 +90,7 @@ template <typename T>
 __global__ void calculateGradState(int hiddenSize, int batchSize,
                                    T* cellOutput, T* gradCellOutput,
                                    T* outputGates, T* gradOutputGates,
-                                   int* numInArcs, T* gradOutput) {
+                                   T* normalizingConstants, T* gradOutput) {
   int index = blockIdx.x * blockDim.x + threadIdx.x;
   if (index >= batchSize * hiddenSize) return;
 
@@ -94,13 +100,13 @@ __global__ void calculateGradState(int hiddenSize, int batchSize,
   T outputGateActivation = sigmoid<T>(outputGates[index]);
   gradCellOutput[index] = (1 - cellActivation * cellActivation) * gradOutput[index] * outputGateActivation;
   gradOutputGates[index] = cellActivation * gradOutput[index] * outputGateActivation * (1 - outputGateActivation);
-  gradCellOutput[index] /= numInArcs[batch];
-  gradOutputGates[index] /= numInArcs[batch];
+  gradCellOutput[index] /= normalizingConstants[batch];
+  gradOutputGates[index] /= normalizingConstants[batch];
 }
 
 template <typename T>
 __global__ void gradLstmElemwise(int t, int hiddenSize, int batchSize,
-                                 int* targets, int* targetBatches, int numOutArcs_t,
+                                 int* targets, int* batches, int numInArcs_t,
                                  T* hR, T* xW, T* bias,
                                  T* gates, T* gradGates,
                                  T* cellOutput, T* gradCellOutput,

@@ -20,6 +20,7 @@ function MultiscaleLSTM:__init(batchSize, inputSize, hiddenSize)
 
   self.numInArcs = torch.IntTensor()
   self.numOutArcs = torch.IntTensor()
+  self.normalizingConstants = torch.Tensor()
 
   -- Gradients
   self.gradCellOutput = torch.Tensor()
@@ -32,9 +33,12 @@ function MultiscaleLSTM:parameters()
 end
 
 function MultiscaleLSTM:updateOutput(input)
+  -- These are cast to float tensors when :cuda() is called on the module
   self.numInArcs = self.numInArcs:cudaInt()
   self.numOutArcs = self.numOutArcs:cudaInt()
+
   local input, targets, batches, origins = table.unpack(input)
+
   input.THNN.MultiscaleLSTM_updateOutput(
     -- Inputs
     input:cdata(),
@@ -49,7 +53,9 @@ function MultiscaleLSTM:updateOutput(input)
     self.recurrentWeight:cdata(),
     self.bias:cdata(),
     -- Buffers
+    self.numOutArcs:cdata(),
     self.numInArcs:cdata(),
+    self.normalizingConstants:cdata(),
     self._xW:cdata(),
     self._hR:cdata(),
     self._gates:cdata(),
@@ -79,7 +85,9 @@ function MultiscaleLSTM:updateGradInput(input, gradOutput)
     self.recurrentWeight:cdata(),
     self.bias:cdata(),
     -- Buffers
+    self.numOutArcs:cdata(),
     self.numInArcs:cdata(),
+    self.normalizingConstants:cdata(),
     self._xW:cdata(),
     self._hR:cdata(),
     self._gates:cdata(),
