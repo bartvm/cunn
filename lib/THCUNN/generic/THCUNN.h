@@ -332,6 +332,7 @@ TH_API void THNN_(MultiscaleLSTM_updateGradInput)(
           THCTensor *normalizingConstants,  // Incoming arcs per step and batch
           THCTensor *xW,
           THCTensor *hR,
+          THCTensor *gradHR,
           THCTensor *gates,
           THCTensor *gradGates,
           THCTensor *outputGates,

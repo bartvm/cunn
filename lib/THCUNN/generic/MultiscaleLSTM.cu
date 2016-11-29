@@ -210,6 +210,7 @@ void THNN_(MultiscaleLSTM_updateGradInput)(
           THCTensor *normalizingConstants,  // Incoming arcs per step and batch
           THCTensor *xW,
           THCTensor *hR,
+          THCTensor *gradHR,
           THCTensor *gates,
           THCTensor *gradGates,
           THCTensor *outputGates,
@@ -223,26 +224,31 @@ void THNN_(MultiscaleLSTM_updateGradInput)(
   int hiddenSize = THCTensor_(size)(state, recurrentWeight, 0);
 
   // Resize buffers
+  THCTensor_(resizeAs)(state, gradHR, hR);
   THCTensor_(resizeAs)(state, gradInput, input);
   THCTensor_(resizeAs)(state, gradGates, gates);
   THCTensor_(resizeAs)(state, gradCellOutput, cellOutput);
   THCTensor_(resizeAs)(state, gradOutputGates, outputGates);
 
+  // Accumulation tensors set to zero
+  THCTensor_(zero)(state, gradHR);
+  THCTensor_(zero)(state, gradGates);
+
   // Sort arcs by destinations instead of origins
   // TODO Re-use buffers instead of allocating each time
-  THCudaIntTensor* targets_ = THCudaIntTensor_newClone(state, targets);
-  THCudaIntTensor* batches_ = THCudaIntTensor_newClone(state, batches);
-  THCudaIntTensor* origins_ = THCudaIntTensor_newClone(state, origins);
+  // THCudaIntTensor* targets_ = THCudaIntTensor_newClone(state, targets);
+  // THCudaIntTensor* batches_ = THCudaIntTensor_newClone(state, batches);
+  // THCudaIntTensor* origins_ = THCudaIntTensor_newClone(state, origins);
 
-  thrust::device_ptr<int> targets_ptr(THCudaIntTensor_data(state, targets_));
-  thrust::device_ptr<int> batches_ptr(THCudaIntTensor_data(state, batches_));
-  thrust::device_ptr<int> origins_ptr(THCudaIntTensor_data(state, origins_));
+  // thrust::device_ptr<int> targets_ptr(THCudaIntTensor_data(state, targets_));
+  // thrust::device_ptr<int> batches_ptr(THCudaIntTensor_data(state, batches_));
+  // thrust::device_ptr<int> origins_ptr(THCudaIntTensor_data(state, origins_));
 
-  typedef thrust::tuple<thrust::device_ptr<int>, thrust::device_ptr<int>, thrust::device_ptr<int> > Tuple;
-  typedef thrust::zip_iterator<Tuple> ZipIterator;
-  ZipIterator iter(thrust::make_tuple(targets_ptr, batches_ptr, origins_ptr));
+  // typedef thrust::tuple<thrust::device_ptr<int>, thrust::device_ptr<int>, thrust::device_ptr<int> > Tuple;
+  // typedef thrust::zip_iterator<Tuple> ZipIterator;
+  // ZipIterator iter(thrust::make_tuple(targets_ptr, batches_ptr, origins_ptr));
 
-  thrust::sort_by_key(targets_ptr, targets_ptr + totalInputs, iter);
+  // thrust::sort_by_key(targets_ptr, targets_ptr + totalInputs, iter);
 
   // Create tensors to view slices
   THCTensor *gradOutput_t = THCTensor_(new)(state);
@@ -253,10 +259,11 @@ void THNN_(MultiscaleLSTM_updateGradInput)(
   // Create tensors to hold the slices at each step
   THCTensor *output_t = THCTensor_(new)(state);
   THCTensor *hR_t = THCTensor_(new)(state);
+  THCTensor *gradHR_t = THCTensor_(new)(state);
   THCTensor *xW_t = THCTensor_(new)(state);
   THCTensor *gates_t = THCTensor_(new)(state);
-  THCudaIntTensor *origins__t = THCudaIntTensor_new(state);
-  THCudaIntTensor *batches__t = THCudaIntTensor_new(state);
+  THCudaIntTensor *targets_t = THCudaIntTensor_new(state);
+  THCudaIntTensor *batches_t = THCudaIntTensor_new(state);
   THCTensor *cellOutput_t = THCTensor_(new)(state);
   THCTensor *outputGates_t = THCTensor_(new)(state);
   THCTensor *normalizingConstants_t = THCTensor_(new)(state);
@@ -264,12 +271,12 @@ void THNN_(MultiscaleLSTM_updateGradInput)(
   int nThreads;
 
   int inputsSeen = 0;
-  for (int t = seqLength - 1; t > 0; t--) {
-    THCTensor_(select)(state, cellOutput_t, cellOutput, 0, t);
-    THCTensor_(select)(state, gradCellOutput_t, gradCellOutput, 0, t);
-    THCTensor_(select)(state, outputGates_t, outputGates, 0, t - 1);
-    THCTensor_(select)(state, gradOutputGates_t, gradOutputGates, 0, t - 1);
-    THCTensor_(select)(state, gradOutput_t, gradOutput, 0, t);
+  for (int t = seqLength - 1; t >= 0; t--) {
+    THCTensor_(select)(state, cellOutput_t, cellOutput, 0, t + 1);
+    THCTensor_(select)(state, gradCellOutput_t, gradCellOutput, 0, t + 1);
+    THCTensor_(select)(state, outputGates_t, outputGates, 0, t);
+    THCTensor_(select)(state, gradOutputGates_t, gradOutputGates, 0, t);
+    THCTensor_(select)(state, gradOutput_t, gradOutput, 0, t + 1);
     THCTensor_(select)(state, normalizingConstants_t, normalizingConstants, 0, t);
 
     nThreads = batchSize * hiddenSize;
@@ -284,21 +291,26 @@ void THNN_(MultiscaleLSTM_updateGradInput)(
       THCTensor_(data)(state, gradOutput_t)
     );
 
-    int numInArcs_t = THCudaIntTensor_get1d(state, numInArcs, t);
-    inputsSeen += numInArcs_t;
+    int numOutArcs_t = THCudaIntTensor_get1d(state, numOutArcs, t);
+    inputsSeen += numOutArcs_t;
 
-    THCTensor_(narrow)(state, xW_t, xW, 0, totalInputs - inputsSeen, numInArcs_t);
-    THCTensor_(narrow)(state, gates_t, gates, 0, totalInputs - inputsSeen, numInArcs_t);
-    THCTensor_(narrow)(state, gradGates_t, gradGates, 0, totalInputs - inputsSeen, numInArcs_t);
-    THCudaIntTensor_narrow(state, origins__t, origins, 0, totalInputs - inputsSeen, numInArcs_t);
-    THCudaIntTensor_narrow(state, batches__t, batches, 0, totalInputs - inputsSeen, numInArcs_t);
+    THCTensor_(select)(state, hR_t, hR, 0, t);
+    THCTensor_(select)(state, gradHR_t, gradHR, 0, t);
+    THCTensor_(narrow)(state, xW_t, xW, 0, totalInputs - inputsSeen, numOutArcs_t);
+    THCTensor_(narrow)(state, gates_t, gates, 0, totalInputs - inputsSeen, numOutArcs_t);
+    THCTensor_(narrow)(state, gradGates_t, gradGates, 0, totalInputs - inputsSeen, numOutArcs_t);
+    THCudaIntTensor_narrow(state, targets_t, targets, 0, totalInputs - inputsSeen, numOutArcs_t);
+    THCudaIntTensor_narrow(state, batches_t, batches, 0, totalInputs - inputsSeen, numOutArcs_t);
+
+    nThreads = numOutArcs_t * hiddenSize;
 
     gradLstmElemwise<real><<<GET_BLOCKS(nThreads), CUDA_NUM_THREADS, 0, THCState_getCurrentStream(state)>>>(
         t, hiddenSize, batchSize,
-        THCudaIntTensor_data(state, origins__t),
-        THCudaIntTensor_data(state, batches__t),
-        numInArcs_t,
+        THCudaIntTensor_data(state, targets_t),
+        THCudaIntTensor_data(state, batches_t),
+        numOutArcs_t,
         THCTensor_(data)(state, hR_t),
+        THCTensor_(data)(state, gradHR_t),
         THCTensor_(data)(state, xW_t),
         THCTensor_(data)(state, bias),
         THCTensor_(data)(state, gates_t),
@@ -308,7 +320,99 @@ void THNN_(MultiscaleLSTM_updateGradInput)(
         THCTensor_(data)(state, outputGates),
         THCTensor_(data)(state, gradOutputGates)
     );
+
+    // TODO Separate streams or batched GEMM
+    // THCTensor_(select)(state, output_t, output, 0, t);
+    // #ifdef THC_REAL_IS_FLOAT
+    // THCudaBlas_Sgemm(
+    // #elif defined(THC_REAL_IS_HALF)
+    // THCudaBlas_Hgemm(
+    // #elif defined(THC_REAL_IS_DOUBLE)
+    // THCudaBlas_Dgemm(
+    // #endif
+    //   state,
+    //   'n', 'n',
+    //   hiddenSize * 4,
+    //   batchSize,
+    //   hiddenSize,
+    //   ScalarConvert<int, real>::to(1),
+    //   THCTensor_(data)(state, output_t),
+    //   hiddenSize * 4,
+    //   THCTensor_(data)(state, gradGates),
+    //   hiddenSize,
+    //   ScalarConvert<int, real>::to(1),
+    //   THCTensor_(data)(state, gradRecurrentWeight),
+    //   hiddenSize * 4
+    // );
+
+    THCTensor_(select)(state, gradOutput_t, gradOutput, 0, t);
+    #ifdef THC_REAL_IS_FLOAT
+    THCudaBlas_Sgemm(
+    #elif defined(THC_REAL_IS_HALF)
+    THCudaBlas_Hgemm(
+    #elif defined(THC_REAL_IS_DOUBLE)
+    THCudaBlas_Dgemm(
+    #endif
+      state,
+      't', 'n',
+      hiddenSize,
+      batchSize,
+      hiddenSize * 4,
+      ScalarConvert<int, real>::to(1),
+      THCTensor_(data)(state, recurrentWeight),
+      hiddenSize * 4,
+      THCTensor_(data)(state, gradHR_t),
+      hiddenSize * 4,
+      ScalarConvert<int, real>::to(1),
+      THCTensor_(data)(state, gradOutput_t),
+      hiddenSize
+    );
+
   }
+
+  // #ifdef THC_REAL_IS_FLOAT
+  // THCudaBlas_Sgemm(
+  // #elif defined(THC_REAL_IS_HALF)
+  // THCudaBlas_Hgemm(
+  // #elif defined(THC_REAL_IS_DOUBLE)
+  // THCudaBlas_Dgemm(
+  // #endif
+  //   state,
+  //   'n', 'n',
+  //   4 * hiddenSize,
+  //   totalInputs,
+  //   inputSize,
+  //   ScalarConvert<int, real>::to(1),
+  //   THCTensor_(data)(state, gradGates),
+  //   4 * hiddenSize,
+  //   THCTensor_(data)(state, input),
+  //   inputSize,
+  //   ScalarConvert<int, real>::to(0),
+  //   THCTensor_(data)(state, gradInputWeight),
+  //   4 * hiddenSize
+  // );
+
+  #ifdef THC_REAL_IS_FLOAT
+  THCudaBlas_Sgemm(
+  #elif defined(THC_REAL_IS_HALF)
+  THCudaBlas_Hgemm(
+  #elif defined(THC_REAL_IS_DOUBLE)
+  THCudaBlas_Dgemm(
+  #endif
+    state,
+    't', 'n',
+    inputSize,
+    totalInputs,
+    4 * hiddenSize,
+    ScalarConvert<int, real>::to(1),
+    THCTensor_(data)(state, inputWeight),
+    4 * hiddenSize,
+    THCTensor_(data)(state, gradGates),
+    4 * hiddenSize,
+    ScalarConvert<int, real>::to(0),
+    THCTensor_(data)(state, gradInput),
+    inputSize
+  );
 }
 
 #endif

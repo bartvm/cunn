@@ -50,6 +50,7 @@ __global__ void lstmElemwise(int t, int hiddenSize, int batchSize,
 
   T g[4];
 
+  // TODO Add bias to output gate after aggregation
   for (int i = 0; i < 4; i++) {
     g[i] = xW[i * hiddenSize + inputIndex] +
            hR[i * hiddenSize + hiddenIndex] +
@@ -102,16 +103,34 @@ __global__ void calculateGradState(int hiddenSize, int batchSize,
   gradOutputGates[index] = cellActivation * gradOutput[index] * outputGateActivation * (1 - outputGateActivation);
   gradCellOutput[index] /= normalizingConstants[batch];
   gradOutputGates[index] /= normalizingConstants[batch];
+  // TODO
+  // gradBias[index % hiddenSize] += gradOutputGates[index]
 }
 
 template <typename T>
 __global__ void gradLstmElemwise(int t, int hiddenSize, int batchSize,
-                                 int* targets, int* batches, int numInArcs_t,
-                                 T* hR, T* xW, T* bias,
+                                 int* targets, int* batches, int numOutArcs_t,
+                                 T* hR, T* gradHR, T* xW, T* bias,
                                  T* gates, T* gradGates,
                                  T* cellOutput, T* gradCellOutput,
                                  T* outputGates, T* gradOutputGates) {
+  int index = blockIdx.x * blockDim.x + threadIdx.x;
+  if (index >= numOutArcs_t * hiddenSize) return;
 
+  int input = index / hiddenSize;
+  int offset = index % hiddenSize;
+  int inputIndex = offset + 4 * input * hiddenSize;
+  int originIndex = offset + t * batchSize * hiddenSize + batches[input] * hiddenSize;
+  int targetIndex = offset + targets[input] * batchSize * hiddenSize + batches[input] * hiddenSize;
+
+  gradGates[0 * hiddenSize + inputIndex] += gradOutputGates[targetIndex - batchSize * hiddenSize];
+  gradGates[1 * hiddenSize + inputIndex] += gradCellOutput[targetIndex] * cellOutput[originIndex] * gates[1 * hiddenSize + offset] * (1 - gates[1 * hiddenSize + offset]);
+  gradGates[2 * hiddenSize + inputIndex] += gradCellOutput[targetIndex] * gates[3 * hiddenSize + offset] * gates[2 * hiddenSize + offset] * (1 - gates[2 * hiddenSize + offset]);
+  gradGates[3 * hiddenSize + inputIndex] += gradCellOutput[targetIndex] * gates[2 * hiddenSize + offset] * (1 - gates[3 * hiddenSize + offset] * gates[3 * hiddenSize + offset]);
+
+  for (int i = 0; i < 4; i++) {
+    gradHR[i * hiddenSize + offset] += gradGates[i * hiddenSize + inputIndex];
+  }
 }
 
 #include "generic/MultiscaleLSTM.cu"

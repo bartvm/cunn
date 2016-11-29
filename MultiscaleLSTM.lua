@@ -26,6 +26,7 @@ function MultiscaleLSTM:__init(batchSize, inputSize, hiddenSize)
   self.gradCellOutput = torch.Tensor()
   self._gradOutputGates = torch.Tensor()
   self._gradGates = torch.Tensor()
+  self._gradHR = torch.Tensor()
 end
 
 function MultiscaleLSTM:parameters()
@@ -90,6 +91,7 @@ function MultiscaleLSTM:updateGradInput(input, gradOutput)
     self.normalizingConstants:cdata(),
     self._xW:cdata(),
     self._hR:cdata(),
+    self._gradHR:cdata(),
     self._gates:cdata(),
     self._gradGates:cdata(),
     self._outputGates:cdata(),
