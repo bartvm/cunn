@@ -202,8 +202,11 @@ void THNN_(MultiscaleLSTM_updateGradInput)(
           THCTensor *gradCellOutput,
           // Parameters
           THCTensor *inputWeight,
+          THCTensor *gradInputWeight,
           THCTensor *recurrentWeight,
+          THCTensor *gradRecurrentWeight,
           THCTensor *bias,
+          THCTensor *gradBias,
           // Buffers
           THCudaIntTensor *numOutArcs,
           THCudaIntTensor *numInArcs,
@@ -233,6 +236,7 @@ void THNN_(MultiscaleLSTM_updateGradInput)(
   // Accumulation tensors set to zero
   THCTensor_(zero)(state, gradHR);
   THCTensor_(zero)(state, gradGates);
+  THCTensor_(zero)(state, gradCellOutput);
 
   // Sort arcs by destinations instead of origins
   // TODO Re-use buffers instead of allocating each time
@@ -322,28 +326,28 @@ void THNN_(MultiscaleLSTM_updateGradInput)(
     );
 
     // TODO Separate streams or batched GEMM
-    // THCTensor_(select)(state, output_t, output, 0, t);
-    // #ifdef THC_REAL_IS_FLOAT
-    // THCudaBlas_Sgemm(
-    // #elif defined(THC_REAL_IS_HALF)
-    // THCudaBlas_Hgemm(
-    // #elif defined(THC_REAL_IS_DOUBLE)
-    // THCudaBlas_Dgemm(
-    // #endif
-    //   state,
-    //   'n', 'n',
-    //   hiddenSize * 4,
-    //   batchSize,
-    //   hiddenSize,
-    //   ScalarConvert<int, real>::to(1),
-    //   THCTensor_(data)(state, output_t),
-    //   hiddenSize * 4,
-    //   THCTensor_(data)(state, gradGates),
-    //   hiddenSize,
-    //   ScalarConvert<int, real>::to(1),
-    //   THCTensor_(data)(state, gradRecurrentWeight),
-    //   hiddenSize * 4
-    // );
+    THCTensor_(select)(state, output_t, output, 0, t);
+    #ifdef THC_REAL_IS_FLOAT
+    THCudaBlas_Sgemm(
+    #elif defined(THC_REAL_IS_HALF)
+    THCudaBlas_Hgemm(
+    #elif defined(THC_REAL_IS_DOUBLE)
+    THCudaBlas_Dgemm(
+    #endif
+      state,
+      'n', 't',
+      hiddenSize * 4,
+      hiddenSize,
+      batchSize,
+      ScalarConvert<int, real>::to(1),
+      THCTensor_(data)(state, gradHR_t),
+      hiddenSize * 4,
+      THCTensor_(data)(state, output_t),
+      hiddenSize,
+      ScalarConvert<int, real>::to(1),
+      THCTensor_(data)(state, gradRecurrentWeight),
+      hiddenSize * 4
+    );
 
     THCTensor_(select)(state, gradOutput_t, gradOutput, 0, t);
     #ifdef THC_REAL_IS_FLOAT
@@ -370,27 +374,27 @@ void THNN_(MultiscaleLSTM_updateGradInput)(
 
   }
 
-  // #ifdef THC_REAL_IS_FLOAT
-  // THCudaBlas_Sgemm(
-  // #elif defined(THC_REAL_IS_HALF)
-  // THCudaBlas_Hgemm(
-  // #elif defined(THC_REAL_IS_DOUBLE)
-  // THCudaBlas_Dgemm(
-  // #endif
-  //   state,
-  //   'n', 'n',
-  //   4 * hiddenSize,
-  //   totalInputs,
-  //   inputSize,
-  //   ScalarConvert<int, real>::to(1),
-  //   THCTensor_(data)(state, gradGates),
-  //   4 * hiddenSize,
-  //   THCTensor_(data)(state, input),
-  //   inputSize,
-  //   ScalarConvert<int, real>::to(0),
-  //   THCTensor_(data)(state, gradInputWeight),
-  //   4 * hiddenSize
-  // );
+  #ifdef THC_REAL_IS_FLOAT
+  THCudaBlas_Sgemm(
+  #elif defined(THC_REAL_IS_HALF)
+  THCudaBlas_Hgemm(
+  #elif defined(THC_REAL_IS_DOUBLE)
+  THCudaBlas_Dgemm(
+  #endif
+    state,
+    'n', 't',
+    4 * hiddenSize,
+    inputSize,
+    totalInputs,
+    ScalarConvert<int, real>::to(1),
+    THCTensor_(data)(state, gradGates),
+    4 * hiddenSize,
+    THCTensor_(data)(state, input),
+    inputSize,
+    ScalarConvert<int, real>::to(0),
+    THCTensor_(data)(state, gradInputWeight),
+    4 * hiddenSize
+  );
 
   #ifdef THC_REAL_IS_FLOAT
   THCudaBlas_Sgemm(

@@ -99,7 +99,7 @@ __global__ void calculateGradState(int hiddenSize, int batchSize,
   // NOTE Tanh and sigmoid activations here are recalculated
   T cellActivation = THCNumerics<T>::tanh(cellOutput[index]);
   T outputGateActivation = sigmoid<T>(outputGates[index]);
-  gradCellOutput[index] = (1 - cellActivation * cellActivation) * gradOutput[index] * outputGateActivation;
+  gradCellOutput[index] += (1 - cellActivation * cellActivation) * gradOutput[index] * outputGateActivation;
   gradOutputGates[index] = cellActivation * gradOutput[index] * outputGateActivation * (1 - outputGateActivation);
   gradCellOutput[index] /= normalizingConstants[batch];
   gradOutputGates[index] /= normalizingConstants[batch];
@@ -123,13 +123,14 @@ __global__ void gradLstmElemwise(int t, int hiddenSize, int batchSize,
   int originIndex = offset + t * batchSize * hiddenSize + batches[input] * hiddenSize;
   int targetIndex = offset + targets[input] * batchSize * hiddenSize + batches[input] * hiddenSize;
 
+  gradCellOutput[originIndex] += gradCellOutput[targetIndex] * gates[1 * hiddenSize + inputIndex];
   gradGates[0 * hiddenSize + inputIndex] += gradOutputGates[targetIndex - batchSize * hiddenSize];
-  gradGates[1 * hiddenSize + inputIndex] += gradCellOutput[targetIndex] * cellOutput[originIndex] * gates[1 * hiddenSize + offset] * (1 - gates[1 * hiddenSize + offset]);
-  gradGates[2 * hiddenSize + inputIndex] += gradCellOutput[targetIndex] * gates[3 * hiddenSize + offset] * gates[2 * hiddenSize + offset] * (1 - gates[2 * hiddenSize + offset]);
-  gradGates[3 * hiddenSize + inputIndex] += gradCellOutput[targetIndex] * gates[2 * hiddenSize + offset] * (1 - gates[3 * hiddenSize + offset] * gates[3 * hiddenSize + offset]);
+  gradGates[1 * hiddenSize + inputIndex] += gradCellOutput[targetIndex] * cellOutput[originIndex] * gates[1 * hiddenSize + inputIndex] * (1 - gates[1 * hiddenSize + inputIndex]);
+  gradGates[2 * hiddenSize + inputIndex] += gradCellOutput[targetIndex] * gates[3 * hiddenSize + inputIndex] * gates[2 * hiddenSize + inputIndex] * (1 - gates[2 * hiddenSize + inputIndex]);
+  gradGates[3 * hiddenSize + inputIndex] += gradCellOutput[targetIndex] * gates[2 * hiddenSize + inputIndex] * (1 - gates[3 * hiddenSize + inputIndex] * gates[3 * hiddenSize + inputIndex]);
 
   for (int i = 0; i < 4; i++) {
-    gradHR[i * hiddenSize + offset] += gradGates[i * hiddenSize + inputIndex];
+    gradHR[i * hiddenSize + offset + batches[input] * hiddenSize * 4] += gradGates[i * hiddenSize + inputIndex];
   }
 }
 

@@ -324,8 +324,11 @@ TH_API void THNN_(MultiscaleLSTM_updateGradInput)(
           THCTensor *gradCellOutput,
           // Parameters
           THCTensor *inputWeight,
+          THCTensor *gradInputWeight,
           THCTensor *recurrentWeight,
+          THCTensor *gradRecurrentWeight,
           THCTensor *bias,
+          THCTensor *gradBias,
           // Buffers
           THCudaIntTensor *numOutArcs,
           THCudaIntTensor *numInArcs,

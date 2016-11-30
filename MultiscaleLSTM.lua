@@ -27,6 +27,9 @@ function MultiscaleLSTM:__init(batchSize, inputSize, hiddenSize)
   self._gradOutputGates = torch.Tensor()
   self._gradGates = torch.Tensor()
   self._gradHR = torch.Tensor()
+  self.gradInputWeight = self.inputWeight:clone()
+  self.gradRecurrentWeight = self.recurrentWeight:clone()
+  self.gradBias = self.bias:clone()
 end
 
 function MultiscaleLSTM:parameters()
@@ -83,8 +86,11 @@ function MultiscaleLSTM:updateGradInput(input, gradOutput)
     self.gradCellOutput:cdata(),
     -- Parameters
     self.inputWeight:cdata(),
+    self.gradInputWeight:cdata(),
     self.recurrentWeight:cdata(),
+    self.gradRecurrentWeight:cdata(),
     self.bias:cdata(),
+    self.gradBias:cdata(),
     -- Buffers
     self.numOutArcs:cdata(),
     self.numInArcs:cdata(),
