@@ -316,7 +316,7 @@ TH_API void THNN_(MultiscaleLSTM_backward)(
           THCudaIntTensor *targets,
           THCudaIntTensor *batches,
           THCudaIntTensor *origins,
-          // Inputs
+          // Outputs
           THCTensor *output,
           THCTensor *gradOutput,
           THCTensor *cellOutput,

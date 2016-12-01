@@ -39,6 +39,7 @@ void THNN_(MultiscaleLSTM_updateOutput)(
   int seqLength = *thrust::max_element(targets_ptr, targets_ptr + totalInputs);
 
   // Resize outputs
+  // NOTE They are one longer than the sequence to hold the initial state
   THCTensor_(resize3d)(state, output, seqLength + 1, batchSize, hiddenSize);
   THCTensor_(resize3d)(state, cellOutput, seqLength + 1, batchSize, hiddenSize);
 
@@ -397,6 +398,9 @@ void THNN_(MultiscaleLSTM_backward)(
     THCTensor_(data)(state, gradInput),
     inputSize
   );
+
+  THCTensor_(sum)(state, gradBias, gradGates, 0);
+  THCTensor_(squeeze1d)(state, gradBias, gradBias, 0);
 }
 
 #endif

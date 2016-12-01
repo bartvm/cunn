@@ -16,7 +16,7 @@ __global__ void countArcs(int batchSize, int totalInputs,
                           T* normalizingConstants) {
   int index = blockIdx.x * blockDim.x + threadIdx.x;
   if (index >= totalInputs) return;
-  atomicAdd(normalizingConstants + (targets[index] - 1) * batchSize + batches[index], ScalarConvert<int,T>::to(1));
+  atomicAdd(normalizingConstants + (targets[index] - 1) * batchSize + batches[index], ScalarConvert<int, T>::to(1));
   atomicAdd(numOutArcs + origins[index], 1);
 }
 
@@ -102,8 +102,6 @@ __global__ void calculateGradState(int hiddenSize, int batchSize,
   gradOutputGates[index] = cellActivation * gradOutput[index] * outputGateActivation * (1 - outputGateActivation);
   gradCellOutput[index] /= normalizingConstants[batch];
   gradOutputGates[index] /= normalizingConstants[batch];
-  // TODO
-  // gradBias[index % hiddenSize] += gradOutputGates[index]
 }
 
 template <typename T>
