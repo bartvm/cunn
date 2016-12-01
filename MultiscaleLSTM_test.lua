@@ -21,7 +21,7 @@ m:updateOutput({input, targets, batches, origins})
 
 -- Run backward prop
 gradOutput = torch.ones(3, 2, 2):cuda()
-m:updateGradInput({input, targets, batches, origins}, gradOutput)
+m:backward({input, targets, batches, origins}, gradOutput)
 
 -- Print results and buffers for inspection
 -- print('inputWeight', m.inputWeight)

@@ -70,9 +70,10 @@ function MultiscaleLSTM:updateOutput(input)
   return self.output
 end
 
-function MultiscaleLSTM:updateGradInput(input, gradOutput)
+function MultiscaleLSTM:backward(input, gradOutput, scale)
+  scale = scale or 1
   local input, targets, batches, origins = table.unpack(input)
-  input.THNN.MultiscaleLSTM_updateGradInput(
+  input.THNN.MultiscaleLSTM_backward(
     -- Inputs
     input:cdata(),
     self.gradInput:cdata(),
@@ -103,7 +104,12 @@ function MultiscaleLSTM:updateGradInput(input, gradOutput)
     self._outputGates:cdata(),
     self._gradOutputGates:cdata(),
     -- Config
-    self.batchSize
+    self.batchSize,
+    scale
   )
   return {self.gradInput, nil, nil, nil, nil}
+end
+
+function MultiscaleLSTM:parameters()
+  return {self.inputWeight, self.recurrentWeight, self.bias}, {self.gradInputWeight, self.gradRecurrentWeight, self.gradBias}
 end

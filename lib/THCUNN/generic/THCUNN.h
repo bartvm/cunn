@@ -309,7 +309,7 @@ TH_API void THNN_(MultiscaleLSTM_updateOutput)(
           // Config
           int batchSize);
 
-TH_API void THNN_(MultiscaleLSTM_updateGradInput)(
+TH_API void THNN_(MultiscaleLSTM_backward)(
           THCState *state,
           // Inputs
           THCTensor *input,
@@ -340,7 +340,8 @@ TH_API void THNN_(MultiscaleLSTM_updateGradInput)(
           THCTensor *gradGates,
           THCTensor *outputGates,
           THCTensor *gradOutputGates,
-          int batchSize);
+          int batchSize,
+          float scale);
 
 TH_API void THNN_(PReLU_updateOutput)(
                   THCState *state,

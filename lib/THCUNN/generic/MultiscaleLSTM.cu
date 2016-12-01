@@ -187,7 +187,7 @@ void THNN_(MultiscaleLSTM_updateOutput)(
 
 }
 
-void THNN_(MultiscaleLSTM_updateGradInput)(
+void THNN_(MultiscaleLSTM_backward)(
           THCState *state,
           // Inputs
           THCTensor *input,
@@ -218,7 +218,8 @@ void THNN_(MultiscaleLSTM_updateGradInput)(
           THCTensor *gradGates,
           THCTensor *outputGates,
           THCTensor *gradOutputGates,
-          int batchSize)
+          int batchSize,
+          float scale)
 {
   // Get sizes
   int seqLength = THCTensor_(size)(state, output, 0) - 1;
@@ -339,7 +340,7 @@ void THNN_(MultiscaleLSTM_updateGradInput)(
       hiddenSize * 4,
       hiddenSize,
       batchSize,
-      ScalarConvert<int, real>::to(1),
+      ScalarConvert<float, real>::to(scale),
       THCTensor_(data)(state, gradHR_t),
       hiddenSize * 4,
       THCTensor_(data)(state, output_t),
@@ -386,7 +387,7 @@ void THNN_(MultiscaleLSTM_updateGradInput)(
     4 * hiddenSize,
     inputSize,
     totalInputs,
-    ScalarConvert<int, real>::to(1),
+    ScalarConvert<float, real>::to(scale),
     THCTensor_(data)(state, gradGates),
     4 * hiddenSize,
     THCTensor_(data)(state, input),
