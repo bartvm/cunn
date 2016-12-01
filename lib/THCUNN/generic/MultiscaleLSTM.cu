@@ -62,11 +62,6 @@ void THNN_(MultiscaleLSTM_updateOutput)(
   THCTensor_(zero)(state, normalizingConstants);
   THCudaIntTensor_zero(state, numOutArcs);
 
-  // For debugging
-  THCTensor_(set3d)(state, output, 0, 0, 1, ScalarConvert<int,real>::to(1));
-  THCTensor_(set3d)(state, output, 0, 1, 0, ScalarConvert<int,real>::to(2));
-  THCTensor_(set3d)(state, output, 0, 1, 1, ScalarConvert<int,real>::to(3));
-
   int nThreads = totalInputs;
 
   // Count the number of arcs going in and out at each step
