@@ -239,22 +239,6 @@ void THNN_(MultiscaleLSTM_backward)(
   THCTensor_(zero)(state, gradGates);
   THCTensor_(zero)(state, gradCellOutput);
 
-  // Sort arcs by destinations instead of origins
-  // TODO Re-use buffers instead of allocating each time
-  // THCudaIntTensor* targets_ = THCudaIntTensor_newClone(state, targets);
-  // THCudaIntTensor* batches_ = THCudaIntTensor_newClone(state, batches);
-  // THCudaIntTensor* origins_ = THCudaIntTensor_newClone(state, origins);
-
-  // thrust::device_ptr<int> targets_ptr(THCudaIntTensor_data(state, targets_));
-  // thrust::device_ptr<int> batches_ptr(THCudaIntTensor_data(state, batches_));
-  // thrust::device_ptr<int> origins_ptr(THCudaIntTensor_data(state, origins_));
-
-  // typedef thrust::tuple<thrust::device_ptr<int>, thrust::device_ptr<int>, thrust::device_ptr<int> > Tuple;
-  // typedef thrust::zip_iterator<Tuple> ZipIterator;
-  // ZipIterator iter(thrust::make_tuple(targets_ptr, batches_ptr, origins_ptr));
-
-  // thrust::sort_by_key(targets_ptr, targets_ptr + totalInputs, iter);
-
   // Create tensors to view slices
   THCTensor *gradOutput_t = THCTensor_(new)(state);
   THCTensor *gradGates_t = THCTensor_(new)(state);
