@@ -110,55 +110,58 @@ void THNN_(MultiscaleLSTM_updateOutput)(
 
   int inputsSeen = 0;
   for (int t = 0; t < seqLength; t++) {
-    // Transform the previous hidden state
-    THCTensor_(select)(state, output_t, output, 0, t);
-    THCTensor_(select)(state, hR_t, hR, 0, t);
-    #ifdef THC_REAL_IS_FLOAT
-    THCudaBlas_Sgemm(
-    #elif defined(THC_REAL_IS_HALF)
-    THCudaBlas_Hgemm(
-    #elif defined(THC_REAL_IS_DOUBLE)
-    THCudaBlas_Dgemm(
-    #endif
-      state,
-      'n', 'n',
-      hiddenSize * 4,
-      batchSize,
-      hiddenSize,
-      ScalarConvert<int, real>::to(1),
-      THCTensor_(data)(state, recurrentWeight),
-      hiddenSize * 4,
-      THCTensor_(data)(state, output_t),
-      hiddenSize,
-      ScalarConvert<int, real>::to(0),
-      THCTensor_(data)(state, hR_t),
-      hiddenSize * 4
-    );
-
-    // Perform the LSTM transitions
+    // The number of arcs we must process at this time step
     int numOutArcs_t = THCudaIntTensor_get1d(state, numOutArcs, t);
 
-    THCTensor_(narrow)(state, xW_t, xW, 0, inputsSeen, numOutArcs_t);
-    THCTensor_(narrow)(state, gates_t, gates, 0, inputsSeen, numOutArcs_t);
-    THCudaIntTensor_narrow(state, targets_t, targets, 0, inputsSeen, numOutArcs_t);
-    THCudaIntTensor_narrow(state, batches_t, batches, 0, inputsSeen, numOutArcs_t);
-
-    inputsSeen += numOutArcs_t;
-
-    nThreads = numOutArcs_t * hiddenSize;
-
-    lstmElemwise<real><<<GET_BLOCKS(nThreads), CUDA_NUM_THREADS, 0, THCState_getCurrentStream(state)>>>(
-        t, hiddenSize, batchSize,
-        THCudaIntTensor_data(state, targets_t),
-        THCudaIntTensor_data(state, batches_t),
-        numOutArcs_t,
+    if (numOutArcs_t != 0) {
+      // Transform the hidden state
+      THCTensor_(select)(state, output_t, output, 0, t);
+      THCTensor_(select)(state, hR_t, hR, 0, t);
+      #ifdef THC_REAL_IS_FLOAT
+      THCudaBlas_Sgemm(
+      #elif defined(THC_REAL_IS_HALF)
+      THCudaBlas_Hgemm(
+      #elif defined(THC_REAL_IS_DOUBLE)
+      THCudaBlas_Dgemm(
+      #endif
+        state,
+        'n', 'n',
+        hiddenSize * 4,
+        batchSize,
+        hiddenSize,
+        ScalarConvert<int, real>::to(1),
+        THCTensor_(data)(state, recurrentWeight),
+        hiddenSize * 4,
+        THCTensor_(data)(state, output_t),
+        hiddenSize,
+        ScalarConvert<int, real>::to(0),
         THCTensor_(data)(state, hR_t),
-        THCTensor_(data)(state, xW_t),
-        THCTensor_(data)(state, bias),
-        THCTensor_(data)(state, gates_t),
-        THCTensor_(data)(state, cellOutput),
-        THCTensor_(data)(state, outputGates)
-    );
+        hiddenSize * 4
+      );
+
+      // Perform the LSTM transitions
+      THCTensor_(narrow)(state, xW_t, xW, 0, inputsSeen, numOutArcs_t);
+      THCTensor_(narrow)(state, gates_t, gates, 0, inputsSeen, numOutArcs_t);
+      THCudaIntTensor_narrow(state, targets_t, targets, 0, inputsSeen, numOutArcs_t);
+      THCudaIntTensor_narrow(state, batches_t, batches, 0, inputsSeen, numOutArcs_t);
+
+      inputsSeen += numOutArcs_t;
+
+      nThreads = numOutArcs_t * hiddenSize;
+
+      lstmElemwise<real><<<GET_BLOCKS(nThreads), CUDA_NUM_THREADS, 0, THCState_getCurrentStream(state)>>>(
+          t, hiddenSize, batchSize,
+          THCudaIntTensor_data(state, targets_t),
+          THCudaIntTensor_data(state, batches_t),
+          numOutArcs_t,
+          THCTensor_(data)(state, hR_t),
+          THCTensor_(data)(state, xW_t),
+          THCTensor_(data)(state, bias),
+          THCTensor_(data)(state, gates_t),
+          THCTensor_(data)(state, cellOutput),
+          THCTensor_(data)(state, outputGates)
+      );
+    }
 
     // Average the states of the next time step
     THCTensor_(select)(state, cellOutput_t, cellOutput, 0, t + 1);
@@ -272,6 +275,9 @@ void THNN_(MultiscaleLSTM_backward)(
     );
 
     int numOutArcs_t = THCudaIntTensor_get1d(state, numOutArcs, t);
+    if (numOutArcs_t == 0) {
+      continue;
+    }
     inputsSeen += numOutArcs_t;
 
     THCTensor_(select)(state, hR_t, hR, 0, t);
