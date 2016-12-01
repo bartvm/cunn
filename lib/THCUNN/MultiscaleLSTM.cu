@@ -12,13 +12,12 @@
 template <typename T>
 __global__ void countArcs(int batchSize, int totalInputs,
                           int* targets, int* batches, int* origins,
-                          int* numInArcs, int* numOutArcs,
+                          int* numOutArcs,
                           T* normalizingConstants) {
   int index = blockIdx.x * blockDim.x + threadIdx.x;
   if (index >= totalInputs) return;
   atomicAdd(normalizingConstants + (targets[index] - 1) * batchSize + batches[index], ScalarConvert<int,T>::to(1));
   atomicAdd(numOutArcs + origins[index], 1);
-  atomicAdd(numInArcs + targets[index] - 1, 1);
 }
 
 __global__ void reverseArcs(int batchSize, int totalInputs, int seqLength,

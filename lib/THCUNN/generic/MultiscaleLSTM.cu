@@ -20,7 +20,6 @@ void THNN_(MultiscaleLSTM_updateOutput)(
           THCTensor *bias,
           // Buffers
           THCudaIntTensor *numOutArcs, // Per time step
-          THCudaIntTensor *numInArcs,  // Per time step
           THCTensor *normalizingConstants,  // Incoming arcs per step and batch
           THCTensor *xW,
           THCTensor *hR,
@@ -51,7 +50,6 @@ void THNN_(MultiscaleLSTM_updateOutput)(
   THCTensor_(resize3d)(state, outputGates, seqLength, batchSize, hiddenSize);
 
   THCTensor_(resize2d)(state, normalizingConstants, seqLength, batchSize);
-  THCudaIntTensor_resize1d(state, numInArcs, seqLength);
   THCudaIntTensor_resize1d(state, numOutArcs, seqLength);
 
   // Initial states are zero
@@ -61,7 +59,6 @@ void THNN_(MultiscaleLSTM_updateOutput)(
   // Accumulation tensors need to be set to 0 too
   THCTensor_(zero)(state, outputGates);
   THCTensor_(zero)(state, normalizingConstants);
-  THCudaIntTensor_zero(state, numInArcs);
   THCudaIntTensor_zero(state, numOutArcs);
 
   // For debugging
@@ -77,7 +74,6 @@ void THNN_(MultiscaleLSTM_updateOutput)(
     THCudaIntTensor_data(state, targets),
     THCudaIntTensor_data(state, batches),
     THCudaIntTensor_data(state, origins),
-    THCudaIntTensor_data(state, numInArcs),
     THCudaIntTensor_data(state, numOutArcs),
     THCTensor_(data)(state, normalizingConstants)
   );
@@ -209,7 +205,6 @@ void THNN_(MultiscaleLSTM_backward)(
           THCTensor *gradBias,
           // Buffers
           THCudaIntTensor *numOutArcs,
-          THCudaIntTensor *numInArcs,
           THCTensor *normalizingConstants,  // Incoming arcs per step and batch
           THCTensor *xW,
           THCTensor *hR,

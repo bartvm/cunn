@@ -300,7 +300,6 @@ TH_API void THNN_(MultiscaleLSTM_updateOutput)(
           THCTensor *bias,
           // Buffers
           THCudaIntTensor *numOutArcs, // Per time step
-          THCudaIntTensor *numInArcs,  // Per time step
           THCTensor *normalizingConstants,  // Incoming arcs per step and batch
           THCTensor *xW,
           THCTensor *hR,
@@ -331,7 +330,6 @@ TH_API void THNN_(MultiscaleLSTM_backward)(
           THCTensor *gradBias,
           // Buffers
           THCudaIntTensor *numOutArcs,
-          THCudaIntTensor *numInArcs,
           THCTensor *normalizingConstants,  // Incoming arcs per step and batch
           THCTensor *xW,
           THCTensor *hR,
