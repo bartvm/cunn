@@ -127,7 +127,7 @@ __global__ void gradLstmElemwise(int t, int hiddenSize, int batchSize,
   gradGates[3 * hiddenSize + inputIndex] += gradCellOutput[targetIndex] * gates[2 * hiddenSize + inputIndex] * (1 - gates[3 * hiddenSize + inputIndex] * gates[3 * hiddenSize + inputIndex]);
 
   for (int i = 0; i < 4; i++) {
-    gradHR[i * hiddenSize + offset + batches[input] * hiddenSize * 4] += gradGates[i * hiddenSize + inputIndex];
+    atomicAdd(gradHR + i * hiddenSize + offset + batches[input] * hiddenSize * 4, gradGates[i * hiddenSize + inputIndex]);
   }
 }
 
