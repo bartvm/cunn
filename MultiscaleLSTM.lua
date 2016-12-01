@@ -1,3 +1,4 @@
+local cutorch = require 'cutorch'
 local MultiscaleLSTM, parent = torch.class('nn.MultiscaleLSTM', 'nn.Module')
 
 -- Initial hidden and cell state are zero
@@ -29,6 +30,8 @@ function MultiscaleLSTM:__init(batchSize, inputSize, hiddenSize)
   self.gradInputWeight = self.inputWeight:clone()
   self.gradRecurrentWeight = self.recurrentWeight:clone()
   self.gradBias = self.bias:clone()
+
+  cutorch.reserveStreams(2)
 end
 
 function MultiscaleLSTM:parameters()

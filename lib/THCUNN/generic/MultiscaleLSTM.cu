@@ -302,6 +302,8 @@ void THNN_(MultiscaleLSTM_backward)(
     );
 
     // TODO Separate streams or batched GEMM
+    THCState_setCurrentStreamIndex(state, 1);
+    cublasSetStream(THCState_getCurrentBlasHandle(state), THCState_getCurrentStream(state));
     THCTensor_(select)(state, output_t, output, 0, t);
     #ifdef THC_REAL_IS_FLOAT
     THCudaBlas_Sgemm(
@@ -325,6 +327,8 @@ void THNN_(MultiscaleLSTM_backward)(
       hiddenSize * 4
     );
 
+    THCState_setCurrentStreamIndex(state, 2);
+    cublasSetStream(THCState_getCurrentBlasHandle(state), THCState_getCurrentStream(state));
     THCTensor_(select)(state, gradOutput_t, gradOutput, 0, t);
     #ifdef THC_REAL_IS_FLOAT
     THCudaBlas_Sgemm(
@@ -348,8 +352,12 @@ void THNN_(MultiscaleLSTM_backward)(
       hiddenSize
     );
 
+    THCState_setCurrentStreamIndex(state, 0);
+
   }
 
+  THCState_setCurrentStreamIndex(state, 1);
+  cublasSetStream(THCState_getCurrentBlasHandle(state), THCState_getCurrentStream(state));
   #ifdef THC_REAL_IS_FLOAT
   THCudaBlas_Sgemm(
   #elif defined(THC_REAL_IS_HALF)
@@ -372,6 +380,8 @@ void THNN_(MultiscaleLSTM_backward)(
     4 * hiddenSize
   );
 
+  THCState_setCurrentStreamIndex(state, 2);
+  cublasSetStream(THCState_getCurrentBlasHandle(state), THCState_getCurrentStream(state));
   #ifdef THC_REAL_IS_FLOAT
   THCudaBlas_Sgemm(
   #elif defined(THC_REAL_IS_HALF)
@@ -393,6 +403,8 @@ void THNN_(MultiscaleLSTM_backward)(
     THCTensor_(data)(state, gradInput),
     inputSize
   );
+
+  THCState_setCurrentStreamIndex(state, 0);
 
   THCTensor_(sum)(state, gradBias, gradGates, 0);
   THCTensor_(squeeze1d)(state, gradBias, gradBias, 0);
