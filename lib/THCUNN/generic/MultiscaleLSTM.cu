@@ -53,9 +53,9 @@ void THNN_(MultiscaleLSTM_updateOutput)(
   THCTensor_(resize2d)(state, normalizingConstants, seqLength, batchSize);
   THCudaIntTensor_resize1d(state, numOutArcs, seqLength);
 
-  // Initial states are zero
-  THCTensor_(zero)(state, output);
-  THCTensor_(zero)(state, cellOutput);
+  // Set cellOutput to zero but leave initial state alone
+  THCTensor* cellOutput_ = THCTensor_(newNarrow)(state, cellOutput, 0, 1, seqLength);
+  THCTensor_(zero)(state, cellOutput_);
 
   // Accumulation tensors need to be set to 0 too
   THCTensor_(zero)(state, outputGates);

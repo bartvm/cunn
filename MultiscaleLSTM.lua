@@ -1,8 +1,6 @@
 local cutorch = require 'cutorch'
 local MultiscaleLSTM, parent = torch.class('nn.MultiscaleLSTM', 'nn.Module')
 
--- Initial hidden and cell state are zero
-
 function MultiscaleLSTM:__init(batchSize, inputSize, hiddenSize)
   parent.__init(self)
   self.batchSize = batchSize
@@ -31,6 +29,11 @@ function MultiscaleLSTM:__init(batchSize, inputSize, hiddenSize)
   self.gradRecurrentWeight = self.recurrentWeight:clone()
   self.gradBias = self.bias:clone()
 
+  -- Set the initial states to zero
+  self.output:resize(1, batchSize, hiddenSize):zero()
+  self.cellOutput:resize(1, batchSize, hiddenSize):zero()
+
+  -- Create streams
   cutorch.reserveStreams(2)
 end
 
@@ -71,6 +74,7 @@ function MultiscaleLSTM:updateOutput(input)
 end
 
 function MultiscaleLSTM:backward(input, gradOutput, scale)
+  -- NOTE This module changes the gradient w.r.t. the output in place
   scale = scale or 1
   local input, targets, batches, origins = table.unpack(input)
   input.THNN.MultiscaleLSTM_backward(
@@ -109,6 +113,12 @@ function MultiscaleLSTM:backward(input, gradOutput, scale)
   return {self.gradInput, nil, nil, nil, nil}
 end
 
-function MultiscaleLSTM:parameters()
-  return {self.inputWeight, self.recurrentWeight, self.bias}, {self.gradInputWeight, self.gradRecurrentWeight, self.gradBias}
+function MultiscaleLSTM:reset()
+  self.output[1]:zero()
+  self.cellOutput[1]:zero()
+end
+
+function MultiscaleLSTM:carry()
+  self.output[1]:copy(self.output[-1])
+  self.cellOutput[1]:copy(self.cellOutput[-1])
 end
