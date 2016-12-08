@@ -416,4 +416,86 @@ void THNN_(MultiscaleLSTM_backward)(
   THCTensor_(squeeze1d)(state, gradBias, gradBias, 0);
 }
 
+void THNN_(MultiscaleCriterion_updateOutput)(
+    // Inputs
+    THCState *state,
+    THCTensor *input,
+    THCudaIntTensor *targets,
+    THCudaIntTensor *batches,
+    THCudaIntTensor *origins,
+    THCudaIntTensor *arcs,
+    // Output
+    THCTensor *output,
+    // Buffers
+    THCTensor *stateProbs,
+    THCudaIntTensor *numOutArcs, // Per time step
+    THCudaIntTensor *seqLengths)
+{
+  int totalInputs = THCudaIntTensor_size(state, targets, 0);
+  int seqLength = THCTensor_(size)(state, input, 0);
+  int batchSize = THCTensor_(size)(state, input, 1);
+  int dictSize = THCTensor_(size)(state, input, 2);
+
+  // Resize buffers and output
+  THCudaIntTensor_resize1d(state, seqLengths, batchSize);
+  THCTensor_(resize2d)(state, stateProbs, seqLength, batchSize);
+  THCudaIntTensor_resize1d(state, numOutArcs, seqLength);
+  THCTensor_(resize1d)(state, output, 1);
+
+  // Initial state probabilities are 1
+  THCTensor_(fill)(state, THCTensor_(newSelect)(state, stateProbs, 0, 0), ScalarConvert<float, real>::to(1));
+
+  // Find the sequence lengths of each example in batch as well as the number of out arcs
+  int nThreads = totalInputs;
+  findSeqLengths<<<GET_BLOCKS(nThreads), CUDA_NUM_THREADS, 0, THCState_getCurrentStream(state)>>>(
+    totalInputs,
+    THCudaIntTensor_data(state, targets),
+    THCudaIntTensor_data(state, batches),
+    THCudaIntTensor_data(state, origins),
+    THCudaIntTensor_data(state, seqLengths),
+    THCudaIntTensor_data(state, numOutArcs)
+  );
+
+  THCudaIntTensor *targets_t = THCudaIntTensor_new(state);
+  THCudaIntTensor *batches_t = THCudaIntTensor_new(state);
+  THCudaIntTensor *origins_t = THCudaIntTensor_new(state);
+  THCudaIntTensor *arcs_t = THCudaIntTensor_new(state);
+  THCTensor *input_t= THCTensor_(new)(state);
+
+  // Calculate the actual state probabilities
+  int inputsSeen = 0;
+  for (int t = 0; t < seqLength; t++) {
+    int numOutArcs_t = THCudaIntTensor_get1d(state, numOutArcs, t);
+
+    THCudaIntTensor_narrow(state, targets_t, targets, 0, inputsSeen, numOutArcs_t);
+    THCudaIntTensor_narrow(state, batches_t, targets, 0, inputsSeen, numOutArcs_t);
+    THCudaIntTensor_narrow(state, origins_t, targets, 0, inputsSeen, numOutArcs_t);
+    THCudaIntTensor_narrow(state, arcs_t, targets, 0, inputsSeen, numOutArcs_t);
+    THCTensor_(select)(state, input_t, input, 0, t);
+
+    nThreads = numOutArcs_t;
+    if (numOutArcs_t != 0) {
+      calculateStateProbs<real><<<GET_BLOCKS(nThreads), CUDA_NUM_THREADS, 0, THCState_getCurrentStream(state)>>>(
+        batchSize, numOutArcs_t,
+        THCTensor_(data)(state, input_t),
+        THCTensor_(data)(state, stateProbs),
+        THCudaIntTensor_data(state, targets_t),
+        THCudaIntTensor_data(state, batches_t),
+        THCudaIntTensor_data(state, origins_t),
+        THCudaIntTensor_data(state, arcs_t)
+      );
+    }
+  }
+
+  nThreads = batchSize;
+  sumStateProbs<real><<<GET_BLOCKS(nThreads), CUDA_NUM_THREADS, 0, THCState_getCurrentStream(state)>>>(
+    batchSize,
+    THCTensor_(data)(state, stateProbs),
+    THCudaIntTensor_data(state, seqLengths),
+    THCTensor_(data)(state, output)
+  );
+
+  THCTensor_(div)(state, output, output, ScalarConvert<float, real>::to(totalInputs));
+
+}
 #endif

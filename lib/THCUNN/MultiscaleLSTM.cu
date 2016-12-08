@@ -5,9 +5,6 @@
 
 #include <thrust/device_ptr.h>
 #include <thrust/extrema.h>
-#include <thrust/sort.h>
-#include <thrust/tuple.h>
-#include <thrust/iterator/zip_iterator.h>
 
 template <typename T>
 __global__ void countArcs(int batchSize, int totalInputs,
@@ -129,6 +126,41 @@ __global__ void gradLstmElemwise(int t, int hiddenSize, int batchSize,
   for (int i = 0; i < 4; i++) {
     atomicAdd(gradHR + i * hiddenSize + offset + batches[input] * hiddenSize * 4, gradGates[i * hiddenSize + inputIndex]);
   }
+}
+
+__global__ void findSeqLengths(int totalInputs, int* targets, int* batches,
+                               int* origins, int* seqLengths, int* numOutArcs) {
+  int index = blockIdx.x * blockDim.x + threadIdx.x;
+  if (index >= totalInputs) return;
+
+  seqLengths[batches[index]] = atomicMax(seqLengths + batches[index], targets[index]);
+  atomicAdd(numOutArcs + origins[index], 1);
+}
+
+template <typename T>
+__global__ void calculateStateProbs(int batchSize, int numOutArcs_t, T* input, T* stateProbs,
+                                    int* targets, int* batches, int* origins, int* arcs) {
+  int index = blockIdx.x * blockDim.x + threadIdx.x;
+  if (index >= numOutArcs_t) return;
+
+  int targetIndex = targets[index] * batchSize + batches[index];
+  int originIndex = origins[index] * batchSize + batches[index];
+
+  T stateProb = stateProbs[targetIndex];
+  T pathProb = input[arcs[index]] + stateProbs[originIndex];
+
+  T minProb = pathProb < stateProb ? pathProb : stateProb;
+  T maxProb = pathProb > stateProb ? pathProb : stateProb;
+
+  stateProbs[targetIndex] = maxProb + THCNumerics<T>::log1p(THCNumerics<T>::exp(minProb - maxProb));
+}
+
+template <typename T>
+__global__ void sumStateProbs(int batchSize, T* stateProbs, int* seqLengths, T* output) {
+  int index = blockIdx.x * blockDim.x + threadIdx.x;
+  if (index >= batchSize) return;
+
+  atomicAdd(output, stateProbs[seqLengths[index] * batchSize + index]);
 }
 
 #include "generic/MultiscaleLSTM.cu"
