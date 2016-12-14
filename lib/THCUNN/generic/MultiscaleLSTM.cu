@@ -29,7 +29,7 @@ void THNN_(MultiscaleLSTM_updateOutput)(
           int batchSize)
 {
   // Get sizes
-  int totalInputs = THCTensor_(size)(state, input, 0);
+  int totalInputs = THCudaIntTensor_size(state, targets, 0);
   int inputSize = THCTensor_(size)(state, input, 1);
   int hiddenSize = THCTensor_(size)(state, recurrentWeight, 0);
 
@@ -429,21 +429,29 @@ void THNN_(MultiscaleCriterion_updateOutput)(
     // Buffers
     THCTensor *stateProbs,
     THCudaIntTensor *numOutArcs, // Per time step
-    THCudaIntTensor *seqLengths)
+    THCudaIntTensor *seqLengths,
+    bool ignoreLast)
 {
   int totalInputs = THCudaIntTensor_size(state, targets, 0);
-  int seqLength = THCTensor_(size)(state, input, 0);
+  int seqLength = THCTensor_(size)(state, input, 0) - (ignoreLast ? 1 : 0);
   int batchSize = THCTensor_(size)(state, input, 1);
   int dictSize = THCTensor_(size)(state, input, 2);
 
   // Resize buffers and output
   THCudaIntTensor_resize1d(state, seqLengths, batchSize);
-  THCTensor_(resize2d)(state, stateProbs, seqLength, batchSize);
+  THCTensor_(resize2d)(state, stateProbs, seqLength + 1, batchSize);
   THCudaIntTensor_resize1d(state, numOutArcs, seqLength);
   THCTensor_(resize1d)(state, output, 1);
 
+  // Set accumlating tensors to zero
+  THCudaIntTensor_zero(state, numOutArcs);
+  THCudaIntTensor_zero(state, seqLengths);
+  THCTensor_(zero)(state, output);
+
   // Initial state probabilities are 1
+  THCTensor_(fill)(state, stateProbs, THCNumerics<real>::min());
   THCTensor_(fill)(state, THCTensor_(newSelect)(state, stateProbs, 0, 0), ScalarConvert<float, real>::to(1));
+  THCudaCheck(cudaDeviceSynchronize());
 
   // Find the sequence lengths of each example in batch as well as the number of out arcs
   int nThreads = totalInputs;
@@ -468,9 +476,9 @@ void THNN_(MultiscaleCriterion_updateOutput)(
     int numOutArcs_t = THCudaIntTensor_get1d(state, numOutArcs, t);
 
     THCudaIntTensor_narrow(state, targets_t, targets, 0, inputsSeen, numOutArcs_t);
-    THCudaIntTensor_narrow(state, batches_t, targets, 0, inputsSeen, numOutArcs_t);
-    THCudaIntTensor_narrow(state, origins_t, targets, 0, inputsSeen, numOutArcs_t);
-    THCudaIntTensor_narrow(state, arcs_t, targets, 0, inputsSeen, numOutArcs_t);
+    THCudaIntTensor_narrow(state, batches_t, batches, 0, inputsSeen, numOutArcs_t);
+    THCudaIntTensor_narrow(state, origins_t, origins, 0, inputsSeen, numOutArcs_t);
+    THCudaIntTensor_narrow(state, arcs_t, arcs, 0, inputsSeen, numOutArcs_t);
     THCTensor_(select)(state, input_t, input, 0, t);
 
     nThreads = numOutArcs_t;

@@ -1,4 +1,5 @@
 require 'cunn'
+torch.manualSeed(0)
 
 -- Module
 m = nn.MultiscaleLSTM(2, 3, 2)
@@ -15,6 +16,7 @@ input = torch.CudaTensor{0.415958315, 0.692421913, 0.605638087, 0.71125555, 0.18
 targets = torch.CudaIntTensor{1, 2, 1, 2}
 batches = torch.CudaIntTensor{0, 0, 1, 0}
 origins = torch.CudaIntTensor{0, 0, 0, 1}
+arcs = torch.CudaIntTensor{2, 3, 1, 0}
 
 -- Run forward prop
 m:updateOutput({input, targets, batches, origins})
@@ -44,3 +46,20 @@ print('gradInputWeight', m.gradInputWeight)
 print('gradRecurrentWeight', m.gradRecurrentWeight)
 -- print('numOutArcs', m.numOutArcs)
 -- print('normalizingConstants', m.normalizingConstants)
+
+-- Criterion stuff
+dictSize = 4
+
+probs = nn.Sequential()
+  :add(nn.Linear(2, dictSize))
+  :add(nn.LogSoftMax())
+probs:cuda()
+
+logprobs = probs:forward(m.output:resize(6, 2)):resize(3, 2, 2)
+
+m2 = nn.MultiscaleCriterion():cuda()
+cost = m2:forward(logprobs, {targets, batches, origins, arcs})
+print('numOutArs', m2.numOutArcs)
+print('seqLengths', m2.seqLengths)
+print('stateProbs', m2._stateProbs)
+print(cost)

@@ -341,6 +341,22 @@ TH_API void THNN_(MultiscaleLSTM_backward)(
           int batchSize,
           float scale);
 
+TH_API void THNN_(MultiscaleCriterion_updateOutput)(
+    // Inputs
+    THCState *state,
+    THCTensor *input,
+    THCudaIntTensor *targets,
+    THCudaIntTensor *batches,
+    THCudaIntTensor *origins,
+    THCudaIntTensor *arcs,
+    // Output
+    THCTensor *output,
+    // Buffers
+    THCTensor *stateProbs,
+    THCudaIntTensor *numOutArcs, // Per time step
+    THCudaIntTensor *seqLengths,
+    bool ignoreLast);
+
 TH_API void THNN_(PReLU_updateOutput)(
                   THCState *state,
                   THCTensor *input,
