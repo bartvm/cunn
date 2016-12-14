@@ -145,17 +145,13 @@ __global__ void calculateStateProbs(int batchSize, int numOutArcs_t, T* input, T
 
   int targetIndex = targets[index] * batchSize + batches[index];
   int originIndex = origins[index] * batchSize + batches[index];
-  printf("targetIndex, originIndex = %d, %d\n", targetIndex, originIndex);
 
-  printf("stateProb = %f\n", stateProbs[targetIndex]);
   T stateProb = stateProbs[targetIndex];
-  printf("patProb = %f + %f\n", input[arcs[index]], stateProbs[originIndex]);
   T pathProb = input[arcs[index]] + stateProbs[originIndex];
 
   T minProb = pathProb < stateProb ? pathProb : stateProb;
   T maxProb = pathProb > stateProb ? pathProb : stateProb;
 
-  printf("setting stateProbs[%d] to %f + log1p(exp(%f - %f))\n", targetIndex, maxProb, minProb, maxProb);
   stateProbs[targetIndex] = maxProb + THCNumerics<T>::log1p(THCNumerics<T>::exp(minProb - maxProb));
 }
 
