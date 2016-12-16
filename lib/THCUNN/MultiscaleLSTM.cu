@@ -156,10 +156,32 @@ __global__ void calculateStateProbs(int batchSize, int numOutArcs_t, T* input, T
 }
 
 template <typename T>
-__global__ void sumStateProbs(int batchSize, T* stateProbs, int* seqLengths, T* output) {
+__global__ void calculateGradStateProbs(int batchSize, int numOutArcs_t,
+                                        T* input, T* gradInput,
+                                        T* stateProbs, T* gradStateProbs,
+                                        int* targets, int* batches, int* origins, int* arcs) {
+  int index = blockIdx.x * blockDim.x + threadIdx.x;
+  if (index >= numOutArcs_t) return;
+
+  int targetIndex = targets[index] * batchSize + batches[index];
+  int originIndex = origins[index] * batchSize + batches[index];
+
+  T stateProb = stateProbs[targetIndex];
+  T pathProb = input[arcs[index]] + stateProbs[originIndex];
+  T gradStateProb = gradStateProbs[targetIndex];
+
+  T arcGrad = THCNumerics<T>::exp(pathProb - stateProb) * gradStateProb;
+  gradInput[arcs[index]] = arcGrad;
+  atomicAdd(gradStateProbs + originIndex, arcGrad);
+
+}
+
+template <typename T>
+__global__ void sumStateProbs(int batchSize, T* stateProbs, int* seqLengths, T* output, T* gradStateProbs) {
   int index = blockIdx.x * blockDim.x + threadIdx.x;
   if (index >= batchSize) return;
 
+  gradStateProbs[seqLengths[index] * batchSize + index] = ScalarConvert<float, T>::to(1);
   atomicAdd(output, stateProbs[seqLengths[index] * batchSize + index]);
 }
 

@@ -353,6 +353,7 @@ TH_API void THNN_(MultiscaleCriterion_updateOutput)(
     THCTensor *output,
     // Buffers
     THCTensor *stateProbs,
+    THCTensor *gradStateProbs,
     THCudaIntTensor *numOutArcs, // Per time step
     THCudaIntTensor *seqLengths,
     bool ignoreLast);
@@ -370,6 +371,7 @@ TH_API void THNN_(MultiscaleCriterion_updateGradInput)(
     THCTensor *output,
     // Buffers
     THCTensor *stateProbs,
+    THCTensor *gradStateProbs,
     THCudaIntTensor *numOutArcs, // Per time step
     THCudaIntTensor *seqLengths,
     bool ignoreLast);
