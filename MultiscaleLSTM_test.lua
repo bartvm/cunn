@@ -1,8 +1,13 @@
 require 'cunn'
 torch.manualSeed(0)
 
+batchSize = 2
+inputSize = 3
+hiddenSize = 2
+dictSize = 4
+
 -- Module
-m = nn.MultiscaleLSTM(2, 3, 2)
+m = nn.MultiscaleLSTM(batchSize, inputSize, hiddenSize)
 
 -- Parameters
 m.inputWeight:copy(torch.Tensor{0.330683768, 0.655926347, 0.475718617, 0.123243622, 0.633974314, 0.909508169, 0.172109187, 0.573160887, 0.587634325, 0.00642378349, 0.419762284, 0.664884865, 0.995248556, 0.625612378, 0.87671113, 0.437151968, 0.121769592, 0.851266503, 0.232840911, 0.762105942, 0.28621015, 0.409843385, 0.0413793214, 0.464297682})
@@ -18,11 +23,13 @@ batches = torch.CudaIntTensor{0, 0, 1, 0}
 origins = torch.CudaIntTensor{0, 0, 0, 1}
 arcs = torch.CudaIntTensor{2, 3, 1, 0}
 
+seqLength = torch.max(targets)
+
 -- Run forward prop
 m:updateOutput({input, targets, batches, origins})
 
 -- Run backward prop
-gradOutput = torch.ones(3, 2, 2):cuda()
+gradOutput = torch.ones(seqLength + 1, batchSize, hiddenSize):cuda()
 m:backward({input, targets, batches, origins}, gradOutput)
 
 -- Print results and buffers for inspection
@@ -48,14 +55,13 @@ print('gradRecurrentWeight', m.gradRecurrentWeight)
 -- print('normalizingConstants', m.normalizingConstants)
 
 -- Criterion stuff
-dictSize = 4
 
 probs = nn.Sequential()
-  :add(nn.Linear(2, dictSize))
+  :add(nn.Linear(hiddenSize, dictSize))
   :add(nn.LogSoftMax())
 probs:cuda()
 
-logprobs = probs:forward(m.output:resize(6, 2)):resize(3, 2, 2)
+logprobs = probs:forward(m.output:resize((seqLength + 1) * batchSize, hiddenSize)):resize(seqLength + 1, batchSize, dictSize)
 
 m2 = nn.MultiscaleCriterion():cuda()
 cost = m2:forward(logprobs, {targets, batches, origins, arcs})
@@ -64,4 +70,5 @@ print('numOutArs', m2.numOutArcs)
 print('seqLengths', m2.seqLengths)
 print('stateProbs', m2._stateProbs)
 print('gradStateProbs', m2._gradStateProbs)
+print('gradInput', m2.gradInput)
 print(cost)

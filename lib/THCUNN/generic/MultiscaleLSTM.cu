@@ -436,6 +436,7 @@ void THNN_(MultiscaleCriterion_updateOutput)(
   int totalInputs = THCudaIntTensor_size(state, targets, 0);
   int seqLength = THCTensor_(size)(state, input, 0) - (ignoreLast ? 1 : 0);
   int batchSize = THCTensor_(size)(state, input, 1);
+  int dictSize = THCTensor_(size)(state, input, 2);
 
   // Resize buffers and output
   THCudaIntTensor_resize1d(state, seqLengths, batchSize);
@@ -486,7 +487,7 @@ void THNN_(MultiscaleCriterion_updateOutput)(
     nThreads = numOutArcs_t;
     if (numOutArcs_t != 0) {
       calculateStateProbs<real><<<GET_BLOCKS(nThreads), CUDA_NUM_THREADS, 0, THCState_getCurrentStream(state)>>>(
-        batchSize, numOutArcs_t,
+        batchSize, dictSize, numOutArcs_t,
         THCTensor_(data)(state, input_t),
         THCTensor_(data)(state, stateProbs),
         THCudaIntTensor_data(state, targets_t),
@@ -534,6 +535,7 @@ void THNN_(MultiscaleCriterion_updateGradInput)(
   int totalInputs = THCudaIntTensor_size(state, targets, 0);
   int seqLength = THCTensor_(size)(state, input, 0) - (ignoreLast ? 1 : 0);
   int batchSize = THCTensor_(size)(state, input, 1);
+  int dictSize = THCTensor_(size)(state, input, 2);
 
   THCTensor_(resizeAs)(state, gradInput, input);
   THCTensor_(zero)(state, gradInput);
@@ -561,8 +563,7 @@ void THNN_(MultiscaleCriterion_updateGradInput)(
 
     nThreads = numOutArcs_t;
     calculateGradStateProbs<real><<<GET_BLOCKS(nThreads), CUDA_NUM_THREADS, 0, THCState_getCurrentStream(state)>>>(
-      batchSize,
-      numOutArcs_t,
+      batchSize, dictSize, numOutArcs_t,
       THCTensor_(data)(state, input_t),
       THCTensor_(data)(state, gradInput_t),
       THCTensor_(data)(state, stateProbs),

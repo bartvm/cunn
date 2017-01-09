@@ -45,7 +45,7 @@ function MultiscaleLSTM:updateOutput(input)
   -- These are cast to float tensors when :cuda() is called on the module
   self.numOutArcs = self.numOutArcs:cudaInt()
 
-  local input, targets, batches, origins = table.unpack(input)
+  local input, targets, origins, batches = table.unpack(input)
 
   input.THNN.MultiscaleLSTM_updateOutput(
     -- Inputs
@@ -76,7 +76,7 @@ end
 function MultiscaleLSTM:backward(input, gradOutput, scale)
   -- NOTE This module changes the gradient w.r.t. the output in place
   scale = scale or 1
-  local input, targets, batches, origins = table.unpack(input)
+  local input, targets, origins, batches = table.unpack(input)
   input.THNN.MultiscaleLSTM_backward(
     -- Inputs
     input:cdata(),

@@ -138,16 +138,18 @@ __global__ void findSeqLengths(int totalInputs, int* targets, int* batches,
 }
 
 template <typename T>
-__global__ void calculateStateProbs(int batchSize, int numOutArcs_t, T* input, T* stateProbs,
+__global__ void calculateStateProbs(int batchSize, int dictSize, int numOutArcs_t,
+                                    T* input, T* stateProbs,
                                     int* targets, int* batches, int* origins, int* arcs) {
   int index = blockIdx.x * blockDim.x + threadIdx.x;
   if (index >= numOutArcs_t) return;
 
   int targetIndex = targets[index] * batchSize + batches[index];
   int originIndex = origins[index] * batchSize + batches[index];
+  int arcIndex = batches[index] * dictSize + arcs[index];
 
   T stateProb = stateProbs[targetIndex];
-  T pathProb = input[arcs[index]] + stateProbs[originIndex];
+  T pathProb = input[arcIndex] + stateProbs[originIndex];
 
   T minProb = pathProb < stateProb ? pathProb : stateProb;
   T maxProb = pathProb > stateProb ? pathProb : stateProb;
@@ -156,7 +158,7 @@ __global__ void calculateStateProbs(int batchSize, int numOutArcs_t, T* input, T
 }
 
 template <typename T>
-__global__ void calculateGradStateProbs(int batchSize, int numOutArcs_t,
+__global__ void calculateGradStateProbs(int batchSize, int dictSize, int numOutArcs_t,
                                         T* input, T* gradInput,
                                         T* stateProbs, T* gradStateProbs,
                                         int* targets, int* batches, int* origins, int* arcs) {
@@ -165,13 +167,14 @@ __global__ void calculateGradStateProbs(int batchSize, int numOutArcs_t,
 
   int targetIndex = targets[index] * batchSize + batches[index];
   int originIndex = origins[index] * batchSize + batches[index];
+  int arcIndex = batches[index] * dictSize + arcs[index];
 
   T stateProb = stateProbs[targetIndex];
-  T pathProb = input[arcs[index]] + stateProbs[originIndex];
+  T pathProb = input[arcIndex] + stateProbs[originIndex];
   T gradStateProb = gradStateProbs[targetIndex];
 
   T arcGrad = THCNumerics<T>::exp(pathProb - stateProb) * gradStateProb;
-  gradInput[arcs[index]] = arcGrad;
+  gradInput[arcIndex] = arcGrad;
   atomicAdd(gradStateProbs + originIndex, arcGrad);
 
 }
