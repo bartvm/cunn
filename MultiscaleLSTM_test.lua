@@ -26,23 +26,24 @@ arcs = torch.CudaIntTensor{2, 3, 1, 0}
 seqLength = torch.max(targets)
 
 -- Run forward prop
-m:updateOutput({input, targets, batches, origins})
+m:updateOutput({input, targets, origins, batches})
 
 -- Run backward prop
 gradOutput = torch.ones(seqLength + 1, batchSize, hiddenSize):cuda()
-m:backward({input, targets, batches, origins}, gradOutput)
+m:backward({input, targets, origins, batches}, gradOutput)
 
 -- Print results and buffers for inspection
 -- print('inputWeight', m.inputWeight)
 -- print('recurrentWeight', m.recurrentWeight)
 -- print('bias', m.bias)
--- print('xW', m._xW)
--- print('hR', m._hR)
--- print('output', m.output)
--- print('cellOutput', m.cellOutput)
+print('xW', m._xW)
+print('hR', m._hR)
+print('output', m.output)
+print('cellOutput', m.cellOutput)
 print('gradCellOutput', m.gradCellOutput)
 print('gradOutput', gradOutput)
--- print('gates', m._gates)
+print('gates', m._gates)
+print('normalizingConstants', m.normalizingConstants)
 -- print('outputGates', m._outputGates)
 print('gradOutputGates', m._gradOutputGates)
 print('gradGates', m._gradGates)
@@ -64,8 +65,8 @@ probs:cuda()
 logprobs = probs:forward(m.output:resize((seqLength + 1) * batchSize, hiddenSize)):resize(seqLength + 1, batchSize, dictSize)
 
 m2 = nn.MultiscaleCriterion():cuda()
-cost = m2:forward(logprobs, {targets, batches, origins, arcs})
-m2:backward(logprobs, {targets, batches, origins, arcs})
+cost = m2:forward(logprobs, {targets, origins, batches, arcs})
+m2:backward(logprobs, {targets, origins, batches, arcs})
 print('numOutArs', m2.numOutArcs)
 print('seqLengths', m2.seqLengths)
 print('stateProbs', m2._stateProbs)
