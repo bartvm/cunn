@@ -63,10 +63,11 @@ probs = nn.Sequential()
 probs:cuda()
 
 logprobs = probs:forward(m.output:resize((seqLength + 1) * batchSize, hiddenSize)):resize(seqLength + 1, batchSize, dictSize)
+print('probs', torch.exp(logprobs))
 
 m2 = nn.MultiscaleCriterion():cuda()
-cost = m2:forward(logprobs, {targets, origins, batches, arcs})
-m2:backward(logprobs, {targets, origins, batches, arcs})
+cost = m2:forward(logprobs, {arcs, targets, origins, batches})
+m2:backward(logprobs, {arcs, targets, origins, batches})
 print('numOutArs', m2.numOutArcs)
 print('seqLengths', m2.seqLengths)
 print('stateProbs', m2._stateProbs)

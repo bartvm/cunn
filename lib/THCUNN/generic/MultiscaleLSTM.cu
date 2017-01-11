@@ -449,9 +449,9 @@ void THNN_(MultiscaleCriterion_updateOutput)(
   THCudaIntTensor_zero(state, seqLengths);
   THCTensor_(zero)(state, output);
 
-  // Initial state probabilities are 1
+  // Initial state probabilities are 1 (so 0 in log-space)
   THCTensor_(fill)(state, stateProbs, THCNumerics<real>::min());
-  THCTensor_(fill)(state, THCTensor_(newSelect)(state, stateProbs, 0, 0), ScalarConvert<float, real>::to(1));
+  THCTensor_(fill)(state, THCTensor_(newSelect)(state, stateProbs, 0, 0), ScalarConvert<float, real>::to(0));
   THCudaCheck(cudaDeviceSynchronize());
 
   // Find the sequence lengths of each example in batch as well as the number of out arcs
@@ -511,7 +511,8 @@ void THNN_(MultiscaleCriterion_updateOutput)(
     THCTensor_(data)(state, gradStateProbs)
   );
 
-  THCTensor_(div)(state, output, output, ScalarConvert<float, real>::to(totalInputs));
+  // The cost can be divided by batchSize, the sum of sequence lengths, or totalInputs
+  // THCTensor_(div)(state, output, output, ScalarConvert<float, real>::to(totalInputs));
 }
 
 void THNN_(MultiscaleCriterion_updateGradInput)(
