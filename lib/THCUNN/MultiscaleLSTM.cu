@@ -78,8 +78,13 @@ __global__ void calculateState(int hiddenSize, int batchSize,
   if (index >= batchSize * hiddenSize) return;
 
   int batch = index / hiddenSize;
-  cellOutput[index] /= normalizingConstants[batch];
-  outputGates[index] /= normalizingConstants[batch];
+  // States can be unreachable, in case we divide by zero here. In principle
+  // not a problem, but the results nans propagate through the linear layer so
+  // better to avoid
+  if (THCNumerics<T>::ne(normalizingConstants[batch], ScalarConvert<float, T>::to(0))) {
+    cellOutput[index] /= normalizingConstants[batch];
+    outputGates[index] /= normalizingConstants[batch];
+  }
   output[index] = THCNumerics<T>::tanh(cellOutput[index]) * sigmoid<T>(outputGates[index]);
 }
 
@@ -184,6 +189,7 @@ __global__ void sumStateProbs(int batchSize, T* stateProbs, int* seqLengths, T* 
   int index = blockIdx.x * blockDim.x + threadIdx.x;
   if (index >= batchSize) return;
 
+  // Set the initial gradient to 1
   gradStateProbs[seqLengths[index] * batchSize + index] = ScalarConvert<float, T>::to(1);
   atomicAdd(output, stateProbs[seqLengths[index] * batchSize + index]);
 }

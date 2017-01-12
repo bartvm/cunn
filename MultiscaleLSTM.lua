@@ -73,6 +73,11 @@ function MultiscaleLSTM:updateOutput(input)
   return self.output
 end
 
+function MultiscaleLSTM:updateGradInput(input, gradOutput)
+  -- TODO Separate accGradParameters and updateGradInput into two kernels
+  return self:backward(input, gradOutput, 1)
+end
+
 function MultiscaleLSTM:backward(input, gradOutput, scale)
   -- NOTE This module changes the gradient w.r.t. the output in place
   scale = scale or 1
@@ -110,7 +115,7 @@ function MultiscaleLSTM:backward(input, gradOutput, scale)
     self.batchSize,
     scale
   )
-  return {self.gradInput, nil, nil, nil, nil}
+  return {self.gradInput, nil, nil, nil}
 end
 
 function MultiscaleLSTM:reset()
