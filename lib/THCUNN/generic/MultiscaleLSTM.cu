@@ -511,8 +511,8 @@ void THNN_(MultiscaleCriterion_updateOutput)(
     THCTensor_(data)(state, gradStateProbs)
   );
 
-  // The cost can be divided by batchSize, the sum of sequence lengths, or totalInputs
-  // THCTensor_(div)(state, output, output, ScalarConvert<float, real>::to(totalInputs));
+  // Dividing by the sum of sequence lengths gives us the cost per character
+  THCTensor_(div)(state, output, output, ScalarConvert<int, real>::to(THCudaIntTensor_sumall(state, seqLengths)));
 }
 
 void THNN_(MultiscaleCriterion_updateGradInput)(

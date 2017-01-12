@@ -189,8 +189,8 @@ __global__ void sumStateProbs(int batchSize, T* stateProbs, int* seqLengths, T* 
   int index = blockIdx.x * blockDim.x + threadIdx.x;
   if (index >= batchSize) return;
 
-  // Set the initial gradient to 1
-  gradStateProbs[seqLengths[index] * batchSize + index] = ScalarConvert<float, T>::to(1);
+  // Set the initial gradient to -1 (because we are minimizing NLL)
+  gradStateProbs[seqLengths[index] * batchSize + index] = ScalarConvert<float, T>::to(-1);
   atomicAdd(output, stateProbs[seqLengths[index] * batchSize + index]);
 }
 

@@ -30,7 +30,7 @@ function MultiscaleCriterion:updateOutput(input, target)
     self.seqLengths:cdata(),
     self.ignoreLast
   )
-  self.output = self._output[1]
+  self.output = -self._output[1]
   return self.output
 end
 
