@@ -180,6 +180,17 @@ void THNN_(MultiscaleLSTM_updateOutput)(
     );
   }
 
+  THCTensor_(free)(state, cellOutput_t);
+  THCTensor_(free)(state, outputGates_t);
+  THCTensor_(free)(state, normalizingConstants_t);
+  THCTensor_(free)(state, output_t);
+  THCTensor_(free)(state, gates_t);
+  THCTensor_(free)(state, xW_t);
+  THCTensor_(free)(state, hR_t);
+  THCudaIntTensor_free(state, targets_t);
+  THCudaIntTensor_free(state, batches_t);
+  THCTensor_(free)(state, cellOutput_);
+
 }
 
 void THNN_(MultiscaleLSTM_backward)(
@@ -414,6 +425,22 @@ void THNN_(MultiscaleLSTM_backward)(
 
   THCTensor_(sum)(state, gradBias, gradGates, 0);
   THCTensor_(squeeze1d)(state, gradBias, gradBias, 0);
+
+  THCTensor_(free)(state, gradOutput_t);
+  THCTensor_(free)(state, gradGates_t);
+  THCTensor_(free)(state, gradCellOutput_t);
+  THCTensor_(free)(state, gradOutputGates_t);
+  THCTensor_(free)(state, output_t);
+  THCTensor_(free)(state, hR_t);
+  THCTensor_(free)(state, gradHR_t);
+  THCTensor_(free)(state, xW_t);
+  THCTensor_(free)(state, gates_t);
+  THCTensor_(free)(state, cellOutput_t);
+  THCTensor_(free)(state, outputGates_t);
+  THCTensor_(free)(state, normalizingConstants_t);
+  THCudaIntTensor_free(state, targets_t);
+  THCudaIntTensor_free(state, batches_t);
+
 }
 
 void THNN_(MultiscaleCriterion_updateOutput)(
@@ -450,8 +477,9 @@ void THNN_(MultiscaleCriterion_updateOutput)(
   THCTensor_(zero)(state, output);
 
   // Initial state probabilities are 1 (so 0 in log-space)
+  THCTensor *stateProbs_t = THCTensor_(newSelect)(state, stateProbs, 0, 0);
   THCTensor_(fill)(state, stateProbs, THCNumerics<real>::min());
-  THCTensor_(fill)(state, THCTensor_(newSelect)(state, stateProbs, 0, 0), ScalarConvert<float, real>::to(0));
+  THCTensor_(fill)(state, stateProbs_t, ScalarConvert<float, real>::to(0));
   THCudaCheck(cudaDeviceSynchronize());
 
   // Find the sequence lengths of each example in batch as well as the number of out arcs
@@ -513,6 +541,13 @@ void THNN_(MultiscaleCriterion_updateOutput)(
 
   // Dividing by the sum of sequence lengths gives us the cost per character
   THCTensor_(div)(state, output, output, ScalarConvert<int, real>::to(THCudaIntTensor_sumall(state, seqLengths)));
+
+  THCTensor_(free)(state, stateProbs_t);
+  THCTensor_(free)(state, input_t);
+  THCudaIntTensor_free(state, targets_t);
+  THCudaIntTensor_free(state, batches_t);
+  THCudaIntTensor_free(state, origins_t);
+  THCudaIntTensor_free(state, arcs_t);
 }
 
 void THNN_(MultiscaleCriterion_updateGradInput)(
@@ -576,6 +611,13 @@ void THNN_(MultiscaleCriterion_updateGradInput)(
     );
 
   }
+
+  THCudaIntTensor_free(state, targets_t);
+  THCudaIntTensor_free(state, batches_t);
+  THCudaIntTensor_free(state, origins_t);
+  THCudaIntTensor_free(state, arcs_t);
+  THCTensor_(free)(state, input_t);
+  THCTensor_(free)(state, gradInput_t);
 
 }
 #endif
