@@ -4,6 +4,7 @@ require "cunn.THCUNN"
 
 require('cunn.test')
 require('cunn.DataParallelTable')
+require('cunn.MultiscaleAverage')
 require('cunn.MultiscaleLSTM')
 require('cunn.MultiscaleCriterion')
 

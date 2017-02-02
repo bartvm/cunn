@@ -26,6 +26,13 @@ batches = torch.CudaIntTensor{0, 0, 1, 0}
 origins = torch.CudaIntTensor{0, 0, 0, 1}
 arcs = torch.CudaIntTensor{2, 3, 1, 0}
 
+m3 = nn.MultiscaleAverage(batchSize, inputSize):cuda()
+print(input)
+print(m3:updateOutput({input, targets, batches}))
+g_ = torch.rand(2, 2, inputSize):cuda()
+print(g_)
+print(m3:updateGradInput({input, targets, batches}, g_)[1])
+
 seqLength = torch.max(targets)
 
 -- Run forward prop

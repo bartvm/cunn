@@ -384,6 +384,27 @@ TH_API void THNN_(MultiscaleCriterion_updateGradInput)(
     THCudaIntTensor *seqLengths,
     bool ignoreLast);
 
+
+TH_API void THNN_(MultiscaleAverage_updateOutput)(
+          THCState *state,
+          THCTensor *embeddings,
+          THCudaIntTensor *targets,
+          THCudaIntTensor *batches,
+          THCTensor *output,
+          THCTensor *normalizingConstants,  // Incoming arcs per step and batch
+          int batchSize);
+
+TH_API void THNN_(MultiscaleAverage_updateGradInput)(
+          THCState *state,
+          // Inputs
+          THCTensor *embeddings,
+          THCudaIntTensor *targets,
+          THCudaIntTensor *batches,
+          THCTensor *gradEmbeddings,
+          THCTensor *gradOutput,
+          THCTensor *normalizingConstants,  // Incoming arcs per step and batch
+          int batchSize);
+
 TH_API void THNN_(PReLU_updateOutput)(
                   THCState *state,
                   THCTensor *input,
