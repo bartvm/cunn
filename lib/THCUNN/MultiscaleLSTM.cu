@@ -34,7 +34,7 @@ __forceinline__ __device__ T sigmoid(T in) {
 template <typename T>
 __global__ void lstmElemwise(int t, int hiddenSize, int batchSize,
                              int* targets, int* batches, int numOutArcs_t,
-                             T* hR, T* xW, T* bias, T* gates,
+                             T* hR, T* xW, T* cW, T* bias, T* gates,
                              T* cellOutput, T* outputGates) {
   int index = blockIdx.x * blockDim.x + threadIdx.x;
   if (index >= numOutArcs_t * hiddenSize) return;
@@ -50,6 +50,7 @@ __global__ void lstmElemwise(int t, int hiddenSize, int batchSize,
   for (int i = 0; i < 4; i++) {
     g[i] = xW[i * hiddenSize + inputIndex] +
            hR[i * hiddenSize + hiddenIndex] +
+           cW[i * hiddenSize + hiddenIndex] +
            bias[i * hiddenSize + offset];
   }
 

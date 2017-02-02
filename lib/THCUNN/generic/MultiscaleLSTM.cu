@@ -8,6 +8,7 @@ void THNN_(MultiscaleLSTM_updateOutput)(
           THCState *state,
           // Inputs
           THCTensor *input,
+          THCTensor *condition,
           THCudaIntTensor *targets,
           THCudaIntTensor *batches,
           THCudaIntTensor *origins,
@@ -17,11 +18,13 @@ void THNN_(MultiscaleLSTM_updateOutput)(
           // Parameters
           THCTensor *inputWeight,
           THCTensor *recurrentWeight,
+          THCTensor *conditionWeight,
           THCTensor *bias,
           // Buffers
           THCudaIntTensor *numOutArcs, // Per time step
           THCTensor *normalizingConstants,  // Incoming arcs per step and batch
           THCTensor *xW,
+          THCTensor *cW,
           THCTensor *hR,
           THCTensor *gates,
           THCTensor *outputGates,
@@ -32,6 +35,7 @@ void THNN_(MultiscaleLSTM_updateOutput)(
   int totalInputs = THCudaIntTensor_size(state, targets, 0);
   int inputSize = THCTensor_(size)(state, input, 1);
   int hiddenSize = THCTensor_(size)(state, recurrentWeight, 0);
+  int conditionSize = THCTensor_(size)(state, conditionWeight, 0);
 
   // The sequence length is the number of hidden states, excluding the initial
   // This means it's equal to the number of elements in the sequence
@@ -48,6 +52,7 @@ void THNN_(MultiscaleLSTM_updateOutput)(
   THCTensor_(resize2d)(state, gates, totalInputs, 4 * hiddenSize);
 
   THCTensor_(resize3d)(state, hR, seqLength, batchSize, 4 * hiddenSize);
+  THCTensor_(resize3d)(state, cW, seqLength, batchSize, 4 * hiddenSize);
   THCTensor_(resize3d)(state, outputGates, seqLength, batchSize, hiddenSize);
 
   THCTensor_(resize2d)(state, normalizingConstants, seqLength, batchSize);
@@ -97,10 +102,34 @@ void THNN_(MultiscaleLSTM_updateOutput)(
     4 * hiddenSize
   );
 
+  // Transform the conditioning data
+  #ifdef THC_REAL_IS_FLOAT
+  THCudaBlas_Sgemm(
+  #elif defined(THC_REAL_IS_HALF)
+  THCudaBlas_Hgemm(
+  #elif defined(THC_REAL_IS_DOUBLE)
+  THCudaBlas_Dgemm(
+  #endif
+    state,
+    'n', 'n',
+    4 * hiddenSize,
+    seqLength * batchSize,
+    conditionSize,
+    ScalarConvert<int, real>::to(1),
+    THCTensor_(data)(state, conditionWeight),
+    4 * hiddenSize,
+    THCTensor_(data)(state, condition),
+    conditionSize,
+    ScalarConvert<int, real>::to(0),
+    THCTensor_(data)(state, cW),
+    4 * hiddenSize
+  );
+
   // Create tensors to hold the slices at each step
   THCTensor *output_t = THCTensor_(new)(state);
   THCTensor *hR_t = THCTensor_(new)(state);
   THCTensor *xW_t = THCTensor_(new)(state);
+  THCTensor *cW_t = THCTensor_(new)(state);
   THCTensor *gates_t = THCTensor_(new)(state);
   THCudaIntTensor *targets_t = THCudaIntTensor_new(state);
   THCudaIntTensor *batches_t = THCudaIntTensor_new(state);
@@ -142,6 +171,7 @@ void THNN_(MultiscaleLSTM_updateOutput)(
       // Perform the LSTM transitions
       THCTensor_(narrow)(state, xW_t, xW, 0, inputsSeen, numOutArcs_t);
       THCTensor_(narrow)(state, gates_t, gates, 0, inputsSeen, numOutArcs_t);
+      THCTensor_(select)(state, cW_t, cW, 0, t);
       THCudaIntTensor_narrow(state, targets_t, targets, 0, inputsSeen, numOutArcs_t);
       THCudaIntTensor_narrow(state, batches_t, batches, 0, inputsSeen, numOutArcs_t);
 
@@ -156,6 +186,7 @@ void THNN_(MultiscaleLSTM_updateOutput)(
           numOutArcs_t,
           THCTensor_(data)(state, hR_t),
           THCTensor_(data)(state, xW_t),
+          THCTensor_(data)(state, cW_t),
           THCTensor_(data)(state, bias),
           THCTensor_(data)(state, gates_t),
           THCTensor_(data)(state, cellOutput),
@@ -198,6 +229,8 @@ void THNN_(MultiscaleLSTM_backward)(
           // Inputs
           THCTensor *input,
           THCTensor *gradInput,
+          THCTensor *condition,
+          THCTensor *gradCondition,
           THCudaIntTensor *targets,
           THCudaIntTensor *batches,
           THCudaIntTensor *origins,
@@ -211,6 +244,8 @@ void THNN_(MultiscaleLSTM_backward)(
           THCTensor *gradInputWeight,
           THCTensor *recurrentWeight,
           THCTensor *gradRecurrentWeight,
+          THCTensor *conditionWeight,
+          THCTensor *gradConditionWeight,
           THCTensor *bias,
           THCTensor *gradBias,
           // Buffers
@@ -218,6 +253,7 @@ void THNN_(MultiscaleLSTM_backward)(
           THCTensor *normalizingConstants,  // Incoming arcs per step and batch
           THCTensor *xW,
           THCTensor *hR,
+          THCTensor *cW,
           THCTensor *gradHR,
           THCTensor *gates,
           THCTensor *gradGates,
@@ -231,10 +267,12 @@ void THNN_(MultiscaleLSTM_backward)(
   int totalInputs = THCTensor_(size)(state, input, 0);
   int inputSize = THCTensor_(size)(state, input, 1);
   int hiddenSize = THCTensor_(size)(state, recurrentWeight, 0);
+  int conditionSize = THCTensor_(size)(state, conditionWeight, 0);
 
   // Resize buffers
   THCTensor_(resizeAs)(state, gradHR, hR);
   THCTensor_(resizeAs)(state, gradInput, input);
+  THCTensor_(resizeAs)(state, gradCondition, condition);
   THCTensor_(resizeAs)(state, gradGates, gates);
   THCTensor_(resizeAs)(state, gradCellOutput, cellOutput);
   THCTensor_(resizeAs)(state, gradOutputGates, outputGates);
@@ -252,6 +290,7 @@ void THNN_(MultiscaleLSTM_backward)(
 
   // Create tensors to hold the slices at each step
   THCTensor *output_t = THCTensor_(new)(state);
+  THCTensor *gradCondition_t = THCTensor_(new)(state);
   THCTensor *hR_t = THCTensor_(new)(state);
   THCTensor *gradHR_t = THCTensor_(new)(state);
   THCTensor *xW_t = THCTensor_(new)(state);
@@ -291,6 +330,7 @@ void THNN_(MultiscaleLSTM_backward)(
     }
     inputsSeen += numOutArcs_t;
 
+    THCTensor_(select)(state, gradCondition_t, gradCondition, 0, t);
     THCTensor_(select)(state, hR_t, hR, 0, t);
     THCTensor_(select)(state, gradHR_t, gradHR, 0, t);
     THCTensor_(narrow)(state, xW_t, xW, 0, totalInputs - inputsSeen, numOutArcs_t);
@@ -369,9 +409,53 @@ void THNN_(MultiscaleLSTM_backward)(
       hiddenSize
     );
 
+    #ifdef THC_REAL_IS_FLOAT
+    THCudaBlas_Sgemm(
+    #elif defined(THC_REAL_IS_HALF)
+    THCudaBlas_Hgemm(
+    #elif defined(THC_REAL_IS_DOUBLE)
+    THCudaBlas_Dgemm(
+    #endif
+      state,
+      't', 'n',
+      conditionSize,
+      batchSize,
+      hiddenSize * 4,
+      ScalarConvert<int, real>::to(1),
+      THCTensor_(data)(state, conditionWeight),
+      hiddenSize * 4,
+      THCTensor_(data)(state, gradHR_t),
+      hiddenSize * 4,
+      ScalarConvert<int, real>::to(0),
+      THCTensor_(data)(state, gradCondition_t),
+      conditionSize
+    );
+
     THCState_setCurrentStreamIndex(state, 0);
 
   }
+
+  #ifdef THC_REAL_IS_FLOAT
+  THCudaBlas_Sgemm(
+  #elif defined(THC_REAL_IS_HALF)
+  THCudaBlas_Hgemm(
+  #elif defined(THC_REAL_IS_DOUBLE)
+  THCudaBlas_Dgemm(
+  #endif
+    state,
+    'n', 't',
+    4 * hiddenSize,
+    conditionSize,
+    seqLength * batchSize,
+    ScalarConvert<float, real>::to(scale),
+    THCTensor_(data)(state, gradHR),
+    4 * hiddenSize,
+    THCTensor_(data)(state, condition),
+    conditionSize,
+    ScalarConvert<int, real>::to(0),
+    THCTensor_(data)(state, gradConditionWeight),
+    4 * hiddenSize
+  );
 
   THCState_setCurrentStreamIndex(state, 1);
   cublasSetStream(THCState_getCurrentBlasHandle(state), THCState_getCurrentStream(state));

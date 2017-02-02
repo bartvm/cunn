@@ -288,6 +288,7 @@ TH_API void THNN_(MultiscaleLSTM_updateOutput)(
           THCState *state,
           // Inputs
           THCTensor *input,
+          THCTensor *condition,
           THCudaIntTensor *targets,
           THCudaIntTensor *batches,
           THCudaIntTensor *origins,
@@ -297,11 +298,13 @@ TH_API void THNN_(MultiscaleLSTM_updateOutput)(
           // Parameters
           THCTensor *inputWeight,
           THCTensor *recurrentWeight,
+          THCTensor *conditionWeight,
           THCTensor *bias,
           // Buffers
           THCudaIntTensor *numOutArcs, // Per time step
           THCTensor *normalizingConstants,  // Incoming arcs per step and batch
           THCTensor *xW,
+          THCTensor *cW,
           THCTensor *hR,
           THCTensor *gates,
           THCTensor *outputGates,
@@ -313,10 +316,12 @@ TH_API void THNN_(MultiscaleLSTM_backward)(
           // Inputs
           THCTensor *input,
           THCTensor *gradInput,
+          THCTensor *condition,
+          THCTensor *gradCondition,
           THCudaIntTensor *targets,
           THCudaIntTensor *batches,
           THCudaIntTensor *origins,
-          // Outputs
+          // Inputs
           THCTensor *output,
           THCTensor *gradOutput,
           THCTensor *cellOutput,
@@ -326,6 +331,8 @@ TH_API void THNN_(MultiscaleLSTM_backward)(
           THCTensor *gradInputWeight,
           THCTensor *recurrentWeight,
           THCTensor *gradRecurrentWeight,
+          THCTensor *conditionWeight,
+          THCTensor *gradConditionWeight,
           THCTensor *bias,
           THCTensor *gradBias,
           // Buffers
@@ -333,6 +340,7 @@ TH_API void THNN_(MultiscaleLSTM_backward)(
           THCTensor *normalizingConstants,  // Incoming arcs per step and batch
           THCTensor *xW,
           THCTensor *hR,
+          THCTensor *cW,
           THCTensor *gradHR,
           THCTensor *gates,
           THCTensor *gradGates,
