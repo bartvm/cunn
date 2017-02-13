@@ -341,6 +341,71 @@ TH_API void THNN_(MultiscaleLSTM_backward)(
           int batchSize,
           float scale);
 
+TH_API void THNN_(ConditionedMultiscaleLSTM_updateOutput)(
+          THCState *state,
+          // Inputs
+          THCTensor *input,
+          THCTensor *condition,
+          THCudaIntTensor *targets,
+          THCudaIntTensor *batches,
+          THCudaIntTensor *origins,
+          // Inputs
+          THCTensor *output,
+          THCTensor *cellOutput,
+          // Parameters
+          THCTensor *inputWeight,
+          THCTensor *recurrentWeight,
+          THCTensor *conditionWeight,
+          THCTensor *bias,
+          // Buffers
+          THCudaIntTensor *numOutArcs, // Per time step
+          THCTensor *normalizingConstants,  // Incoming arcs per step and batch
+          THCTensor *xW,
+          THCTensor *cW,
+          THCTensor *hR,
+          THCTensor *gates,
+          THCTensor *outputGates,
+          // Config
+          int batchSize);
+
+TH_API void THNN_(ConditionedMultiscaleLSTM_backward)(
+          THCState *state,
+          // Inputs
+          THCTensor *input,
+          THCTensor *gradInput,
+          THCTensor *condition,
+          THCTensor *gradCondition,
+          THCudaIntTensor *targets,
+          THCudaIntTensor *batches,
+          THCudaIntTensor *origins,
+          // Inputs
+          THCTensor *output,
+          THCTensor *gradOutput,
+          THCTensor *cellOutput,
+          THCTensor *gradCellOutput,
+          // Parameters
+          THCTensor *inputWeight,
+          THCTensor *gradInputWeight,
+          THCTensor *recurrentWeight,
+          THCTensor *gradRecurrentWeight,
+          THCTensor *conditionWeight,
+          THCTensor *gradConditionWeight,
+          THCTensor *bias,
+          THCTensor *gradBias,
+          // Buffers
+          THCudaIntTensor *numOutArcs,
+          THCTensor *normalizingConstants,  // Incoming arcs per step and batch
+          THCTensor *xW,
+          THCTensor *hR,
+          THCTensor *cW,
+          THCTensor *gradHR,
+          THCTensor *gates,
+          THCTensor *gradGates,
+          THCTensor *outputGates,
+          THCTensor *gradOutputGates,
+          int batchSize,
+          float scale);
+
 TH_API void THNN_(MultiscaleCriterion_updateOutput)(
     // Inputs
     THCState *state,
@@ -375,6 +440,27 @@ TH_API void THNN_(MultiscaleCriterion_updateGradInput)(
     THCudaIntTensor *numOutArcs, // Per time step
     THCudaIntTensor *seqLengths,
     bool ignoreLast);
+
+
+TH_API void THNN_(MultiscaleAverage_updateOutput)(
+          THCState *state,
+          THCTensor *embeddings,
+          THCudaIntTensor *targets,
+          THCudaIntTensor *batches,
+          THCTensor *output,
+          THCTensor *normalizingConstants,  // Incoming arcs per step and batch
+          int batchSize);
+
+TH_API void THNN_(MultiscaleAverage_updateGradInput)(
+          THCState *state,
+          // Inputs
+          THCTensor *embeddings,
+          THCudaIntTensor *targets,
+          THCudaIntTensor *batches,
+          THCTensor *gradEmbeddings,
+          THCTensor *gradOutput,
+          THCTensor *normalizingConstants,  // Incoming arcs per step and batch
+          int batchSize);
 
 TH_API void THNN_(PReLU_updateOutput)(
                   THCState *state,
