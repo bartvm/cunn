@@ -151,7 +151,7 @@ __global__ void calculateStateProbs(int batchSize, int dictSize, int numOutArcs_
 
   int targetIndex = targets[index] * batchSize + batches[index];
   int originIndex = origins[index] * batchSize + batches[index];
-  int arcIndex = batches[index] * dictSize + arcs[index];
+  int arcIndex = batches[index] * dictSize + (arcs[index] - 1);
 
   T stateProb = stateProbs[targetIndex];
   T pathProb = input[arcIndex] + stateProbs[originIndex];
@@ -172,7 +172,7 @@ __global__ void calculateGradStateProbs(int batchSize, int dictSize, int numOutA
 
   int targetIndex = targets[index] * batchSize + batches[index];
   int originIndex = origins[index] * batchSize + batches[index];
-  int arcIndex = batches[index] * dictSize + arcs[index];
+  int arcIndex = batches[index] * dictSize + (arcs[index] - 1);
 
   T stateProb = stateProbs[targetIndex];
   T pathProb = input[arcIndex] + stateProbs[originIndex];
