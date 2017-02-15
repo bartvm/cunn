@@ -35,6 +35,9 @@ function MultiscaleLSTM:__init(batchSize, inputSize, hiddenSize)
 
   -- Create streams
   cutorch.reserveStreams(2)
+
+  -- Initialize weights
+  self:reset()
 end
 
 function MultiscaleLSTM:parameters()
@@ -118,7 +121,7 @@ function MultiscaleLSTM:backward(input, gradOutput, scale)
   return {self.gradInput, nil, nil, nil}
 end
 
-function MultiscaleLSTM:reset()
+function MultiscaleLSTM:forget()
   self.output[1]:zero()
   self.cellOutput[1]:zero()
 end
@@ -126,4 +129,23 @@ end
 function MultiscaleLSTM:carry()
   self.output[1]:copy(self.output[-1])
   self.cellOutput[1]:copy(self.cellOutput[-1])
+end
+
+function MultiscaleLSTM:reset()
+  local inputSize = self.inputWeight:size(1)
+  local hiddenSize = self.inputWeight:size(2) / 4
+  -- Inputweight and bias is Caffe-style Xavier-Glorot
+  local stdv = math.sqrt(6 / (inputSize + hiddenSize))
+  self.inputWeight:uniform(-stdv, stdv)
+  self.bias:zero()
+  -- Weights/biases are in order out, forget, in, cell
+  -- We set the forget gate to a high value
+  self.bias[{{hiddenSize + 1, 2 * hiddenSize}}]:fill(1)
+
+  -- Recurrent weights are orthogonal
+  for i = 0, 3 do
+    local randMat = torch.Tensor(hiddenSize, hiddenSize):normal(0, 1)
+    local U = torch.svd(randMat, 'S')
+    self.recurrentWeight[{{}, {i * hiddenSize + 1, (i + 1) * hiddenSize}}]:copy(U)
+  end
 end
