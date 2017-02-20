@@ -9,6 +9,8 @@ function MultiscaleLSTM:__init(batchSize, inputSize, hiddenSize)
   self.inputWeight = torch.Tensor(inputSize, hiddenSize * 4):zero()
   self.recurrentWeight = torch.Tensor(hiddenSize, hiddenSize * 4):zero()
   self.bias = torch.Tensor(hiddenSize * 4):zero()
+  self.lnBias = torch.Tensor(hiddenSize):zero()
+  self.lnGain = torch.Tensor(hiddenSize * 9):zero()
 
   -- Buffers
   self.cellOutput = torch.Tensor()
@@ -20,6 +22,11 @@ function MultiscaleLSTM:__init(batchSize, inputSize, hiddenSize)
   self.numOutArcs = torch.IntTensor()
   self.normalizingConstants = torch.Tensor()
 
+  -- Layer normalization buffers
+  self._xW_sigma = torch.Tensor()
+  self._hR_sigma = torch.Tensor()
+  self._cellOutput_sigma = torch.Tensor()
+
   -- Gradients
   self.gradCellOutput = torch.Tensor()
   self._gradOutputGates = torch.Tensor()
@@ -28,6 +35,8 @@ function MultiscaleLSTM:__init(batchSize, inputSize, hiddenSize)
   self.gradInputWeight = self.inputWeight:clone()
   self.gradRecurrentWeight = self.recurrentWeight:clone()
   self.gradBias = self.bias:clone()
+  self.gradLnBias = self.lnBias:clone()
+  self.gradLnGain = self.lnGain:clone()
 
   -- Set the initial states to zero
   self.output:resize(1, batchSize, hiddenSize):zero()
@@ -41,7 +50,7 @@ function MultiscaleLSTM:__init(batchSize, inputSize, hiddenSize)
 end
 
 function MultiscaleLSTM:parameters()
-  return {self.inputWeight, self.recurrentWeight, self.bias}, {self.gradInputWeight, self.gradRecurrentWeight, self.gradBias}
+  return {self.inputWeight, self.recurrentWeight, self.bias, self.lnBias, self.lnGain}, {self.gradInputWeight, self.gradRecurrentWeight, self.gradBias, self.gradLnBias, self.gradLnGain}
 end
 
 function MultiscaleLSTM:updateOutput(input)
@@ -63,6 +72,8 @@ function MultiscaleLSTM:updateOutput(input)
     self.inputWeight:cdata(),
     self.recurrentWeight:cdata(),
     self.bias:cdata(),
+    self.lnBias:cdata(),
+    self.lnGain:cdata(),
     -- Buffers
     self.numOutArcs:cdata(),
     self.normalizingConstants:cdata(),
@@ -70,6 +81,10 @@ function MultiscaleLSTM:updateOutput(input)
     self._hR:cdata(),
     self._gates:cdata(),
     self._outputGates:cdata(),
+    -- Layer normalization
+    self._xW_sigma:cdata(),
+    self._hR_sigma:cdata(),
+    self._cellOutput_sigma:cdata(),
     -- Config
     self.batchSize
    )
@@ -104,6 +119,10 @@ function MultiscaleLSTM:backward(input, gradOutput, scale)
     self.gradRecurrentWeight:cdata(),
     self.bias:cdata(),
     self.gradBias:cdata(),
+    self.lnBias:cdata(),
+    self.gradLnBias:cdata(),
+    self.lnGain:cdata(),
+    self.gradLnGain:cdata(),
     -- Buffers
     self.numOutArcs:cdata(),
     self.normalizingConstants:cdata(),
@@ -114,6 +133,10 @@ function MultiscaleLSTM:backward(input, gradOutput, scale)
     self._gradGates:cdata(),
     self._outputGates:cdata(),
     self._gradOutputGates:cdata(),
+    -- Layer normalization
+    self._xW_sigma:cdata(),
+    self._hR_sigma:cdata(),
+    self._cellOutput_sigma:cdata(),
     -- Config
     self.batchSize,
     scale
@@ -141,6 +164,8 @@ function MultiscaleLSTM:reset()
   -- Weights/biases are in order out, forget, in, cell
   -- We set the forget gate to a high value
   self.bias[{{hiddenSize + 1, 2 * hiddenSize}}]:fill(1)
+  self.lnBias:zero()
+  self.lnGain:fill(1)
 
   -- Recurrent weights are orthogonal
   for i = 0, 3 do

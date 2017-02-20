@@ -291,13 +291,15 @@ TH_API void THNN_(MultiscaleLSTM_updateOutput)(
           THCudaIntTensor *targets,
           THCudaIntTensor *batches,
           THCudaIntTensor *origins,
-          // Inputs
+          // Outputs
           THCTensor *output,
           THCTensor *cellOutput,
           // Parameters
           THCTensor *inputWeight,
           THCTensor *recurrentWeight,
           THCTensor *bias,
+          THCTensor *lnBias,
+          THCTensor *lnGain,
           // Buffers
           THCudaIntTensor *numOutArcs, // Per time step
           THCTensor *normalizingConstants,  // Incoming arcs per step and batch
@@ -305,6 +307,10 @@ TH_API void THNN_(MultiscaleLSTM_updateOutput)(
           THCTensor *hR,
           THCTensor *gates,
           THCTensor *outputGates,
+          // Layer normalization
+          THCTensor *xW_sigma,
+          THCTensor *hR_sigma,
+          THCTensor *cellOutput_sigma,
           // Config
           int batchSize);
 
@@ -316,7 +322,7 @@ TH_API void THNN_(MultiscaleLSTM_backward)(
           THCudaIntTensor *targets,
           THCudaIntTensor *batches,
           THCudaIntTensor *origins,
-          // Outputs
+          // Inputs
           THCTensor *output,
           THCTensor *gradOutput,
           THCTensor *cellOutput,
@@ -328,6 +334,10 @@ TH_API void THNN_(MultiscaleLSTM_backward)(
           THCTensor *gradRecurrentWeight,
           THCTensor *bias,
           THCTensor *gradBias,
+          THCTensor *lnBias,
+          THCTensor *gradLnBias,
+          THCTensor *lnGain,
+          THCTensor *gradLnGain,
           // Buffers
           THCudaIntTensor *numOutArcs,
           THCTensor *normalizingConstants,  // Incoming arcs per step and batch
@@ -338,6 +348,10 @@ TH_API void THNN_(MultiscaleLSTM_backward)(
           THCTensor *gradGates,
           THCTensor *outputGates,
           THCTensor *gradOutputGates,
+          // Layer normalization
+          THCTensor *xW_sigma,
+          THCTensor *hR_sigma,
+          THCTensor *cellOutput_sigma,
           int batchSize,
           float scale);
 

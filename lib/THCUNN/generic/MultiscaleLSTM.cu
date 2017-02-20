@@ -11,13 +11,15 @@ void THNN_(MultiscaleLSTM_updateOutput)(
           THCudaIntTensor *targets,
           THCudaIntTensor *batches,
           THCudaIntTensor *origins,
-          // Inputs
+          // Outputs
           THCTensor *output,
           THCTensor *cellOutput,
           // Parameters
           THCTensor *inputWeight,
           THCTensor *recurrentWeight,
           THCTensor *bias,
+          THCTensor *lnBias,
+          THCTensor *lnGain,
           // Buffers
           THCudaIntTensor *numOutArcs, // Per time step
           THCTensor *normalizingConstants,  // Incoming arcs per step and batch
@@ -25,6 +27,10 @@ void THNN_(MultiscaleLSTM_updateOutput)(
           THCTensor *hR,
           THCTensor *gates,
           THCTensor *outputGates,
+          // Layer normalization
+          THCTensor *xW_sigma,
+          THCTensor *hR_sigma,
+          THCTensor *cellOutput_sigma,
           // Config
           int batchSize)
 {
@@ -42,12 +48,16 @@ void THNN_(MultiscaleLSTM_updateOutput)(
   // NOTE They are one longer than the sequence to hold the initial state
   THCTensor_(resize3d)(state, output, seqLength + 1, batchSize, hiddenSize);
   THCTensor_(resize3d)(state, cellOutput, seqLength + 1, batchSize, hiddenSize);
+  printf("X\n");
+  THCTensor_(resize2d)(state, cellOutput_sigma, seqLength + 1, batchSize);
 
   // Resize buffers
   THCTensor_(resize2d)(state, xW, totalInputs, 4 * hiddenSize);
   THCTensor_(resize2d)(state, gates, totalInputs, 4 * hiddenSize);
 
   THCTensor_(resize3d)(state, hR, seqLength, batchSize, 4 * hiddenSize);
+  printf("X\n");
+  THCTensor_(resize2d)(state, hR_sigma, seqLength, batchSize);
   THCTensor_(resize3d)(state, outputGates, seqLength, batchSize, hiddenSize);
 
   THCTensor_(resize2d)(state, normalizingConstants, seqLength, batchSize);
@@ -56,6 +66,8 @@ void THNN_(MultiscaleLSTM_updateOutput)(
   // Set cellOutput to zero but leave initial state alone
   THCTensor* cellOutput_ = THCTensor_(newNarrow)(state, cellOutput, 0, 1, seqLength);
   THCTensor_(zero)(state, cellOutput_);
+  printf("X\n");
+  THCTensor_(free)(state, cellOutput_);
 
   // Accumulation tensors need to be set to 0 too
   THCTensor_(zero)(state, outputGates);
@@ -96,6 +108,34 @@ void THNN_(MultiscaleLSTM_updateOutput)(
     THCTensor_(data)(state, xW),
     4 * hiddenSize
   );
+
+  // Layer normalize the input data
+  printf("X\n");
+  THCTensor *xW_mu = THCTensor_(new)(state);
+
+  THCTensor_(mean)(state, xW_mu, xW, 1);
+  THCTensor_(std)(state, xW_sigma, xW, 1, 0);
+
+  nThreads = totalInputs * 4 * hiddenSize;
+  layerNormalization<real><<<GET_BLOCKS(nThreads), CUDA_NUM_THREADS, 0, THCState_getCurrentStream(state)>>>(
+    totalInputs,
+    4 * hiddenSize,
+    THCTensor_(data)(state, xW),
+    THCTensor_(data)(state, xW),
+    THCTensor_(data)(state, xW_mu),
+    THCTensor_(data)(state, xW_sigma),
+    THCTensor_(data)(state, lnGain)
+  );
+
+  THCTensor_(free)(state, xW_mu);
+  printf("X\n");
+
+  // Create tensors for hidden state and cell layer normalization
+  THCTensor *hR_mu = THCTensor_(new)(state);
+  THCTensor *cellOutput_mu = THCTensor_(new)(state);
+
+  THCTensor *hR_sigma_t = THCTensor_(new)(state);
+  THCTensor *cellOutput_sigma_t = THCTensor_(new)(state);
 
   // Create tensors to hold the slices at each step
   THCTensor *output_t = THCTensor_(new)(state);
@@ -139,6 +179,25 @@ void THNN_(MultiscaleLSTM_updateOutput)(
         hiddenSize * 4
       );
 
+      // Perform layer normalization
+      printf("X\n");
+      THCTensor_(select)(state, hR_sigma_t, hR_sigma, 0, t);
+
+      printf("Y\n");
+      THCTensor_(mean)(state, hR_mu, hR_t, 1);
+      THCTensor_(std)(state, hR_sigma_t, hR_t, 1, 0);
+
+      layerNormalization<real><<<GET_BLOCKS(nThreads), CUDA_NUM_THREADS, 0, THCState_getCurrentStream(state)>>>(
+        batchSize,
+        4 * hiddenSize,
+        THCTensor_(data)(state, hR_t),
+        THCTensor_(data)(state, hR_t),
+        THCTensor_(data)(state, hR_mu),
+        THCTensor_(data)(state, hR_sigma_t),
+        THCTensor_(data)(state, lnGain) + 4 * hiddenSize
+      );
+      printf("Y\n");
+
       // Perform the LSTM transitions
       THCTensor_(narrow)(state, xW_t, xW, 0, inputsSeen, numOutArcs_t);
       THCTensor_(narrow)(state, gates_t, gates, 0, inputsSeen, numOutArcs_t);
@@ -171,13 +230,41 @@ void THNN_(MultiscaleLSTM_updateOutput)(
 
     nThreads = batchSize * hiddenSize;
 
-    calculateState<<<GET_BLOCKS(nThreads), CUDA_NUM_THREADS, 0, THCState_getCurrentStream(state)>>>(
+    printf("Z\n");
+    normalizeState<real><<<GET_BLOCKS(nThreads), CUDA_NUM_THREADS, 0, THCState_getCurrentStream(state)>>>(
       hiddenSize, batchSize,
       THCTensor_(data)(state, cellOutput_t),
       THCTensor_(data)(state, outputGates_t),
-      THCTensor_(data)(state, normalizingConstants_t),
+      THCTensor_(data)(state, normalizingConstants_t)
+    );
+
+    // Layer normalization cell state
+    printf("Z\n");
+    THCTensor_(select)(state, cellOutput_sigma_t, cellOutput_sigma, 0, t);
+
+    THCTensor_(mean)(state, cellOutput_mu, cellOutput_t, 1);
+    THCTensor_(std)(state, cellOutput_sigma_t, cellOutput_t, 1, 0);
+
+    printf("Z\n");
+    layerNormalizationWithBias<real><<<GET_BLOCKS(nThreads), CUDA_NUM_THREADS, 0, THCState_getCurrentStream(state)>>>(
+      batchSize,
+      4 * hiddenSize,
+      THCTensor_(data)(state, cellOutput_t),
+      THCTensor_(data)(state, cellOutput_t),
+      THCTensor_(data)(state, cellOutput_mu),
+      THCTensor_(data)(state, cellOutput_sigma_t),
+      THCTensor_(data)(state, lnGain) + 8 * hiddenSize,
+      THCTensor_(data)(state, lnBias)
+    );
+
+    printf("Z\n");
+    calculateState<real><<<GET_BLOCKS(nThreads), CUDA_NUM_THREADS, 0, THCState_getCurrentStream(state)>>>(
+      hiddenSize, batchSize,
+      THCTensor_(data)(state, cellOutput_t),
+      THCTensor_(data)(state, outputGates_t),
       THCTensor_(data)(state, output_t)
     );
+
   }
 
   THCTensor_(free)(state, cellOutput_t);
@@ -187,9 +274,15 @@ void THNN_(MultiscaleLSTM_updateOutput)(
   THCTensor_(free)(state, gates_t);
   THCTensor_(free)(state, xW_t);
   THCTensor_(free)(state, hR_t);
+
+  // Free LN variables
+  THCTensor_(free)(state, hR_mu);
+  THCTensor_(free)(state, cellOutput_mu);
+  THCTensor_(free)(state, hR_sigma_t);
+  THCTensor_(free)(state, cellOutput_sigma_t);
+
   THCudaIntTensor_free(state, targets_t);
   THCudaIntTensor_free(state, batches_t);
-  THCTensor_(free)(state, cellOutput_);
 
 }
 
@@ -213,6 +306,10 @@ void THNN_(MultiscaleLSTM_backward)(
           THCTensor *gradRecurrentWeight,
           THCTensor *bias,
           THCTensor *gradBias,
+          THCTensor *lnBias,
+          THCTensor *gradLnBias,
+          THCTensor *lnGain,
+          THCTensor *gradLnGain,
           // Buffers
           THCudaIntTensor *numOutArcs,
           THCTensor *normalizingConstants,  // Incoming arcs per step and batch
@@ -223,6 +320,10 @@ void THNN_(MultiscaleLSTM_backward)(
           THCTensor *gradGates,
           THCTensor *outputGates,
           THCTensor *gradOutputGates,
+          // Layer normalization
+          THCTensor *xW_sigma,
+          THCTensor *hR_sigma,
+          THCTensor *cellOutput_sigma,
           int batchSize,
           float scale)
 {
@@ -244,6 +345,24 @@ void THNN_(MultiscaleLSTM_backward)(
   THCTensor_(zero)(state, gradGates);
   THCTensor_(zero)(state, gradCellOutput);
 
+  // LN tensors
+  THCTensor *xW_gain = THCTensor_(new)(state);
+  THCTensor *hR_gain = THCTensor_(new)(state);
+  THCTensor *cellOutput_gain = THCTensor_(new)(state);
+  THCTensor *gradXW_gain = THCTensor_(new)(state);
+  THCTensor *gradHR_gain = THCTensor_(new)(state);
+  THCTensor *gradcellOutput_gain = THCTensor_(new)(state);
+
+  THCTensor *hR_sigma_t = THCTensor_(new)(state);
+  THCTensor *cellOutput_sigma_t = THCTensor_(new)(state);
+
+  THCTensor_(narrow)(state, xW_gain, lnGain, 0, 0, hiddenSize * 4);
+  THCTensor_(narrow)(state, hR_gain, lnGain, 0, hiddenSize * 4, hiddenSize * 4);
+  THCTensor_(narrow)(state, cellOutput_gain, lnGain, 0, hiddenSize * 8, hiddenSize);
+  THCTensor_(narrow)(state, gradXW_gain, gradLnGain, 0, 0, hiddenSize * 4);
+  THCTensor_(narrow)(state, gradHR_gain, gradLnGain, 0, hiddenSize * 4, hiddenSize * 4);
+  THCTensor_(narrow)(state, gradcellOutput_gain, gradLnGain, 0, hiddenSize * 8, hiddenSize);
+
   // Create tensors to view slices
   THCTensor *gradOutput_t = THCTensor_(new)(state);
   THCTensor *gradGates_t = THCTensor_(new)(state);
@@ -261,6 +380,8 @@ void THNN_(MultiscaleLSTM_backward)(
   THCTensor *cellOutput_t = THCTensor_(new)(state);
   THCTensor *outputGates_t = THCTensor_(new)(state);
   THCTensor *normalizingConstants_t = THCTensor_(new)(state);
+
+  THCTensor* tmp = THCTensor_(new)(state);
 
   int nThreads;
 
@@ -281,8 +402,40 @@ void THNN_(MultiscaleLSTM_backward)(
       THCTensor_(data)(state, gradCellOutput_t),
       THCTensor_(data)(state, outputGates_t),
       THCTensor_(data)(state, gradOutputGates_t),
-      THCTensor_(data)(state, normalizingConstants_t),
       THCTensor_(data)(state, gradOutput_t)
+    );
+
+    // Calculate the gradients of the gains and biases for cell
+    THCTensor_(sum)(state, tmp, gradCellOutput_t, 0);
+    THCTensor_(cadd)(state, gradLnBias, gradLnBias, ScalarConvert<int, real>::to(1), tmp);
+
+    THCTensor_(cmul)(state, tmp, gradCellOutput_t, cellOutput_t);
+    THCTensor_(sum)(state, tmp, tmp, 0);
+    THCTensor_(cadd)(state, gradcellOutput_gain, gradcellOutput_gain, ScalarConvert<int, real>::to(1), tmp);
+    THCTensor_(cmul)(state, tmp, tmp, cellOutput_gain);
+    accreal tmp_sum = THCTensor_(sumall)(state, tmp);
+
+    // Calculate the necessary constants for the backprop
+    THCTensor_(sum)(state, tmp, gradCellOutput_t, 0);
+    THCTensor_(cmul)(state, tmp, tmp, cellOutput_gain);
+    accreal gradOutput_sum = THCTensor_(sumall)(state, tmp);
+
+    THCTensor_(select)(state, cellOutput_sigma_t, cellOutput_sigma, 0, t + 1);
+    gradLayerNormalization<real, accreal><<<GET_BLOCKS(nThreads), CUDA_NUM_THREADS, 0, THCState_getCurrentStream(state)>>>(
+      batchSize, hiddenSize,
+      gradOutput_sum, tmp_sum,
+      THCTensor_(data)(state, cellOutput_t),
+      THCTensor_(data)(state, gradCellOutput_t),
+      THCTensor_(data)(state, gradCellOutput_t),
+      THCTensor_(data)(state, cellOutput_sigma_t),
+      THCTensor_(data)(state, lnGain) + 8 * hiddenSize
+    );
+
+    normalizeGradState<real><<<GET_BLOCKS(nThreads), CUDA_NUM_THREADS, 0, THCState_getCurrentStream(state)>>>(
+      hiddenSize, batchSize,
+      THCTensor_(data)(state, gradCellOutput_t),
+      THCTensor_(data)(state, gradOutputGates_t),
+      THCTensor_(data)(state, normalizingConstants_t)
     );
 
     int numOutArcs_t = THCudaIntTensor_get1d(state, numOutArcs, t);
@@ -316,6 +469,29 @@ void THNN_(MultiscaleLSTM_backward)(
         THCTensor_(data)(state, gradCellOutput),
         THCTensor_(data)(state, outputGates),
         THCTensor_(data)(state, gradOutputGates)
+    );
+
+    THCTensor_(cmul)(state, tmp, gradHR_t, hR_t);
+    THCTensor_(sum)(state, tmp, tmp, 0);
+    THCTensor_(cadd)(state, gradHR_gain, gradHR_gain, ScalarConvert<int, real>::to(1), tmp);
+    THCTensor_(cmul)(state, tmp, tmp, hR_gain);
+    tmp_sum = THCTensor_(sumall)(state, tmp);
+
+    // Calculate the necessary constants for the backprop
+    THCTensor_(sum)(state, tmp, gradHR_t, 0);
+    THCTensor_(cmul)(state, tmp, tmp, hR_gain);
+    gradOutput_sum = THCTensor_(sumall)(state, tmp);
+
+    THCTensor_(select)(state, hR_sigma_t, hR_sigma, 0, t);
+
+    gradLayerNormalization<real, accreal><<<GET_BLOCKS(nThreads), CUDA_NUM_THREADS, 0, THCState_getCurrentStream(state)>>>(
+      batchSize, 4 * hiddenSize,
+      gradOutput_sum, tmp_sum,
+      THCTensor_(data)(state, hR_t),
+      THCTensor_(data)(state, gradHR_t),
+      THCTensor_(data)(state, gradHR_t),
+      THCTensor_(data)(state, hR_sigma),
+      THCTensor_(data)(state, lnGain) + 4 * hiddenSize
     );
 
     // TODO Separate streams or batched GEMM
@@ -373,6 +549,32 @@ void THNN_(MultiscaleLSTM_backward)(
 
   }
 
+  THCTensor_(sum)(state, gradBias, gradGates, 0);
+  THCTensor_(squeeze1d)(state, gradBias, gradBias, 0);
+
+  THCTensor_(cmul)(state, tmp, xW, gradGates);
+  THCTensor_(sum)(state, tmp, tmp, 0);
+  THCTensor_(cadd)(state, gradXW_gain, gradXW_gain, ScalarConvert<int, real>::to(1), tmp);
+  THCTensor_(cmul)(state, tmp, tmp, xW_gain);
+  accreal tmp_sum = THCTensor_(sumall)(state, tmp);
+
+  // Calculate the necessary constants for the backprop
+  THCTensor_(sum)(state, tmp, gradGates, 0);
+  THCTensor_(cmul)(state, tmp, tmp, xW_gain);
+  accreal gradOutput_sum = THCTensor_(sumall)(state, tmp);
+
+  THCTensor_(free)(state, tmp);
+
+  gradLayerNormalization<real, accreal><<<GET_BLOCKS(nThreads), CUDA_NUM_THREADS, 0, THCState_getCurrentStream(state)>>>(
+    batchSize, 4 * hiddenSize,
+    gradOutput_sum, tmp_sum,
+    THCTensor_(data)(state, xW),
+    THCTensor_(data)(state, gradGates),
+    THCTensor_(data)(state, gradGates),
+    THCTensor_(data)(state, xW_sigma),
+    THCTensor_(data)(state, lnGain)
+  );
+
   THCState_setCurrentStreamIndex(state, 1);
   cublasSetStream(THCState_getCurrentBlasHandle(state), THCState_getCurrentStream(state));
   #ifdef THC_REAL_IS_FLOAT
@@ -422,9 +624,6 @@ void THNN_(MultiscaleLSTM_backward)(
   );
 
   THCState_setCurrentStreamIndex(state, 0);
-
-  THCTensor_(sum)(state, gradBias, gradGates, 0);
-  THCTensor_(squeeze1d)(state, gradBias, gradBias, 0);
 
   THCTensor_(free)(state, gradOutput_t);
   THCTensor_(free)(state, gradGates_t);

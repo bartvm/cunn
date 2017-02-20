@@ -71,9 +71,9 @@ __global__ void lstmElemwise(int t, int hiddenSize, int batchSize,
 }
 
 template <typename T>
-__global__ void calculateState(int hiddenSize, int batchSize,
+__global__ void normalizeState(int hiddenSize, int batchSize,
                                T* cellOutput, T* outputGates,
-                               T* normalizingConstants, T* output) {
+                               T* normalizingConstants) {
   int index = blockIdx.x * blockDim.x + threadIdx.x;
   if (index >= batchSize * hiddenSize) return;
 
@@ -85,6 +85,15 @@ __global__ void calculateState(int hiddenSize, int batchSize,
     cellOutput[index] /= normalizingConstants[batch];
     outputGates[index] /= normalizingConstants[batch];
   }
+}
+
+template <typename T>
+__global__ void calculateState(int hiddenSize, int batchSize,
+                               T* cellOutput, T* outputGates,
+                               T* output) {
+  int index = blockIdx.x * blockDim.x + threadIdx.x;
+  if (index >= batchSize * hiddenSize) return;
+
   output[index] = THCNumerics<T>::tanh(cellOutput[index]) * sigmoid<T>(outputGates[index]);
 }
 
@@ -92,16 +101,25 @@ template <typename T>
 __global__ void calculateGradState(int hiddenSize, int batchSize,
                                    T* cellOutput, T* gradCellOutput,
                                    T* outputGates, T* gradOutputGates,
-                                   T* normalizingConstants, T* gradOutput) {
+                                   T* gradOutput) {
   int index = blockIdx.x * blockDim.x + threadIdx.x;
   if (index >= batchSize * hiddenSize) return;
 
-  int batch = index / hiddenSize;
   // NOTE Tanh and sigmoid activations here are recalculated
   T cellActivation = THCNumerics<T>::tanh(cellOutput[index]);
   T outputGateActivation = sigmoid<T>(outputGates[index]);
   gradCellOutput[index] += (1 - cellActivation * cellActivation) * gradOutput[index] * outputGateActivation;
   gradOutputGates[index] = cellActivation * gradOutput[index] * outputGateActivation * (1 - outputGateActivation);
+}
+
+template <typename T>
+__global__ void normalizeGradState(int hiddenSize, int batchSize,
+                                   T* gradCellOutput, T* gradOutputGates,
+                                   T* normalizingConstants) {
+  int index = blockIdx.x * blockDim.x + threadIdx.x;
+  if (index >= batchSize * hiddenSize) return;
+
+  int batch = index / hiddenSize;
   gradCellOutput[index] /= normalizingConstants[batch];
   gradOutputGates[index] /= normalizingConstants[batch];
 }
@@ -192,6 +210,49 @@ __global__ void sumStateProbs(int batchSize, T* stateProbs, int* seqLengths, T* 
   // Set the initial gradient to -1 (because we are minimizing NLL)
   gradStateProbs[seqLengths[index] * batchSize + index] = ScalarConvert<float, T>::to(-1);
   atomicAdd(output, stateProbs[seqLengths[index] * batchSize + index]);
+}
+
+template <typename T>
+__global__ void layerNormalization(int batchSize, int dim, T* input, T* output, T* mu, T* sigma, T* gain) {
+  int index = blockIdx.x * blockDim.x + threadIdx.x;
+  if (index >= dim * batchSize) return;
+  int example = index / dim;
+  int offset = index % dim;
+  T eps = ScalarConvert<float, T>::to(1e-5);
+
+  output[index] = (input[index] - mu[example]) / (sigma[example] + eps) * gain[offset];
+}
+
+template <typename T>
+__global__ void layerNormalizationWithBias(int batchSize, int dim,
+                                           T* input, T* output,
+                                           T* mu, T* sigma,
+                                           T* gain, T* bias) {
+  int index = blockIdx.x * blockDim.x + threadIdx.x;
+  if (index >= dim * batchSize) return;
+  int example = index / dim;
+  int offset = index % dim;
+
+  output[index] = (input[index] - mu[example]) / sigma[example] * gain[offset] + bias[offset];
+}
+
+template <typename T, typename T2>
+__global__ void gradLayerNormalization(int batchSize, int dim,
+                                       T2 gradOutput_sum, T2 tmp_sum,
+                                       T* input, T* gradOutput, T* gradInput,
+                                       T* sigma, T* gain) {
+  int index = blockIdx.x * blockDim.x + threadIdx.x;
+  if (index >= dim * batchSize) return;
+  int example = index / dim;
+  int offset = index % dim;
+  T eps = ScalarConvert<float, T>::to(1e-5);
+
+  T dim_T = ScalarConvert<int, T>::to(dim);
+  T gradOutput_sum_T = ScalarConvert<T2, T>::to(gradOutput_sum);
+  T tmp_sum_T = ScalarConvert<T2, T>::to(tmp_sum);
+
+  gradInput[index] = dim_T * gain[offset] * gradOutput[index] - gradOutput_sum_T - input[index] * tmp_sum_T;
+  gradInput[index] /= (sigma[example] + eps) * dim_T;
 }
 
 #include "generic/MultiscaleLSTM.cu"
