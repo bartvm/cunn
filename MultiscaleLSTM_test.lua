@@ -16,6 +16,8 @@ m.bias:copy(torch.Tensor{0.715777934, 0.973472238, 0.17162253, 0.66155535, 0.124
 
 m = m:cuda()
 
+p, dp = m:getParameters()
+
 -- Inputs (0-indexed!)
 input = torch.CudaTensor{0.415958315, 0.692421913, 0.605638087, 0.71125555, 0.187767833, 0.777086318, 0.335184276, 0.0847264156, 0.637676537, 0.790640533, 0.252421021, 0.975926518}:resize(4, 3)
 targets = torch.CudaIntTensor{1, 2, 1, 2}
@@ -52,6 +54,9 @@ print('gradHR', m._gradHR)
 print('gradInput', m.gradInput)
 print('gradInputWeight', m.gradInputWeight)
 print('gradRecurrentWeight', m.gradRecurrentWeight)
+print('gradLnBias', m.gradLnBias)
+print('gradLnGain', m.gradLnGain)
+print('gradParameters', dp)
 -- print('numOutArcs', m.numOutArcs)
 -- print('normalizingConstants', m.normalizingConstants)
 
