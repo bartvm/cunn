@@ -1,5 +1,4 @@
 #include "THCUNN.h"
-#include "THCHalf.h"
 #include "THCHalfAutoNumerics.cuh"
 #include "THCAtomics.cuh"  // For atomicAdd
 
@@ -237,9 +236,9 @@ __global__ void layerNormalizationWithBias(int batchSize, int dim,
   output[index] = (input[index] - mu[example]) / (sigma[example] + eps) * gain[offset] + bias[offset];
 }
 
-template <typename T, typename T2>
+template <typename T>
 __global__ void gradLayerNormalization(int batchSize, int dim,
-                                       T2 gradOutput_sum, T2 tmp_sum,
+                                       T* gradOutput_sum, T* tmp_sum,
                                        T* input, T* gradOutput, T* gradInput,
                                        T* sigma, T* gain) {
   int index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -249,13 +248,11 @@ __global__ void gradLayerNormalization(int batchSize, int dim,
   T eps = ScalarConvert<float, T>::to(1e-3);
 
   T dim_T = ScalarConvert<int, T>::to(dim);
-  T gradOutput_sum_T = ScalarConvert<T2, T>::to(gradOutput_sum);
-  T tmp_sum_T = ScalarConvert<T2, T>::to(tmp_sum);
 
   T before = gradOutput[index];
-  gradInput[index] = dim_T * gain[offset] * gradOutput[index] - gradOutput_sum_T - input[index] * tmp_sum_T;
+  gradInput[index] = dim_T * gain[offset] * gradOutput[index] - gradOutput_sum[example] - input[index] * tmp_sum[example];
   gradInput[index] /= sigma[example] * dim_T + eps;
-  printf("%f = (%f * %f * %f - %f - %f * %f) / (%f * %f + eps)\n", gradInput[index], dim_T, gain[offset], before, gradOutput_sum_T, input[index], tmp_sum_T, sigma[example], dim_T);
+  // printf("%d/%d: %f = (%f * %f * %f - %f - %f * %f) / (%f * %f + eps)\n", example, offset, gradInput[index], dim_T, gain[offset], before, gradOutput_sum[example], input[index], tmp_sum[example], sigma[example], dim_T);
 }
 
 #include "generic/MultiscaleLSTM.cu"
