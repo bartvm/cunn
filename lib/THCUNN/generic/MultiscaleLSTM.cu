@@ -395,19 +395,22 @@ void THNN_(MultiscaleLSTM_backward)(
     );
 
     // Calculate the gradients of the gains and biases for cell
+    long size[2] = {batchSize, hiddenSize};
+    long stride[2] = {0, 1};
+    THCTensor_(resizeNd)(state, cellOutput_gain, 2, size, stride);
+    THCTensor_(cmul)(state, tmp, gradCellOutput_t, cellOutput_gain);
+    THCTensor_(sum)(state, gradOutput_sum, tmp, 1);
+    THCTensor_(cmul)(state, tmp, tmp, cellOutput_t);
+    THCTensor_(sum)(state, tmp_sum, tmp, 1);
+
+    // Bias grad
     THCTensor_(sum)(state, tmp, gradCellOutput_t, 0);
     THCTensor_(cadd)(state, gradLnBias, gradLnBias, ScalarConvert<int, real>::to(1), tmp);
 
+    // Gain grad
     THCTensor_(cmul)(state, tmp, gradCellOutput_t, cellOutput_t);
     THCTensor_(sum)(state, tmp, tmp, 0);
     THCTensor_(cadd)(state, gradcellOutput_gain, gradcellOutput_gain, ScalarConvert<int, real>::to(1), tmp);
-    THCTensor_(cmul)(state, tmp, tmp, cellOutput_gain);
-    accreal tmp_sum = THCTensor_(sumall)(state, tmp);
-
-    // Calculate the necessary constants for the backprop
-    THCTensor_(sum)(state, tmp, gradCellOutput_t, 0);
-    THCTensor_(cmul)(state, tmp, tmp, cellOutput_gain);
-    accreal gradOutput_sum = THCTensor_(sumall)(state, tmp);
 
     THCTensor_(select)(state, cellOutput_sigma_t, cellOutput_sigma, 0, t + 1);
     gradLayerNormalization<real, accreal><<<GET_BLOCKS(nThreads), CUDA_NUM_THREADS, 0, THCState_getCurrentStream(state)>>>(
