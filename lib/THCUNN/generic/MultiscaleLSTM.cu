@@ -62,6 +62,7 @@ void THNN_(MultiscaleLSTM_updateOutput)(
   THCudaIntTensor_resize1d(state, numOutArcs, seqLength);
 
   // Set cellOutput to zero but leave initial state alone
+  THCTensor_(zero)(state, cellOutput_sigma);
   THCTensor* cellOutput_ = THCTensor_(newNarrow)(state, cellOutput, 0, 1, seqLength);
   THCTensor_(zero)(state, cellOutput_);
   THCTensor_(free)(state, cellOutput_);
@@ -230,14 +231,14 @@ void THNN_(MultiscaleLSTM_updateOutput)(
     );
 
     // Layer normalization cell state
-    THCTensor_(select)(state, cellOutput_sigma_t, cellOutput_sigma, 0, t);
+    THCTensor_(select)(state, cellOutput_sigma_t, cellOutput_sigma, 0, t + 1);
 
     THCTensor_(mean)(state, cellOutput_mu, cellOutput_t, 1);
     THCTensor_(std)(state, cellOutput_sigma_t, cellOutput_t, 1, 0);
 
     layerNormalizationWithBias<real><<<GET_BLOCKS(nThreads), CUDA_NUM_THREADS, 0, THCState_getCurrentStream(state)>>>(
       batchSize,
-      4 * hiddenSize,
+      hiddenSize,
       THCTensor_(data)(state, cellOutput_t),
       THCTensor_(data)(state, cellOutput_t),
       THCTensor_(data)(state, cellOutput_mu),
@@ -478,7 +479,7 @@ void THNN_(MultiscaleLSTM_backward)(
       THCTensor_(data)(state, hR_t),
       THCTensor_(data)(state, gradHR_t),
       THCTensor_(data)(state, gradHR_t),
-      THCTensor_(data)(state, hR_sigma),
+      THCTensor_(data)(state, hR_sigma_t),
       THCTensor_(data)(state, lnGain) + 4 * hiddenSize
     );
 
@@ -554,7 +555,7 @@ void THNN_(MultiscaleLSTM_backward)(
   THCTensor_(free)(state, tmp);
 
   gradLayerNormalization<real, accreal><<<GET_BLOCKS(nThreads), CUDA_NUM_THREADS, 0, THCState_getCurrentStream(state)>>>(
-    batchSize, 4 * hiddenSize,
+    totalInputs, 4 * hiddenSize,
     gradOutput_sum, tmp_sum,
     THCTensor_(data)(state, xW),
     THCTensor_(data)(state, gradGates),

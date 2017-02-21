@@ -218,7 +218,7 @@ __global__ void layerNormalization(int batchSize, int dim, T* input, T* output, 
   if (index >= dim * batchSize) return;
   int example = index / dim;
   int offset = index % dim;
-  T eps = ScalarConvert<float, T>::to(1e-5);
+  T eps = ScalarConvert<float, T>::to(1e-3);
 
   output[index] = (input[index] - mu[example]) / (sigma[example] + eps) * gain[offset];
 }
@@ -232,8 +232,9 @@ __global__ void layerNormalizationWithBias(int batchSize, int dim,
   if (index >= dim * batchSize) return;
   int example = index / dim;
   int offset = index % dim;
+  T eps = ScalarConvert<float, T>::to(1e-3);
 
-  output[index] = (input[index] - mu[example]) / sigma[example] * gain[offset] + bias[offset];
+  output[index] = (input[index] - mu[example]) / (sigma[example] + eps) * gain[offset] + bias[offset];
 }
 
 template <typename T, typename T2>
@@ -245,14 +246,16 @@ __global__ void gradLayerNormalization(int batchSize, int dim,
   if (index >= dim * batchSize) return;
   int example = index / dim;
   int offset = index % dim;
-  T eps = ScalarConvert<float, T>::to(1e-5);
+  T eps = ScalarConvert<float, T>::to(1e-3);
 
   T dim_T = ScalarConvert<int, T>::to(dim);
   T gradOutput_sum_T = ScalarConvert<T2, T>::to(gradOutput_sum);
   T tmp_sum_T = ScalarConvert<T2, T>::to(tmp_sum);
 
+  T before = gradOutput[index];
   gradInput[index] = dim_T * gain[offset] * gradOutput[index] - gradOutput_sum_T - input[index] * tmp_sum_T;
-  gradInput[index] /= (sigma[example] + eps) * dim_T;
+  gradInput[index] /= sigma[example] * dim_T + eps;
+  printf("%f = (%f * %f * %f - %f - %f * %f) / (%f * %f + eps)\n", gradInput[index], dim_T, gain[offset], before, gradOutput_sum_T, input[index], tmp_sum_T, sigma[example], dim_T);
 }
 
 #include "generic/MultiscaleLSTM.cu"
