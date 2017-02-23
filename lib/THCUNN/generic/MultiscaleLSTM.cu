@@ -333,8 +333,6 @@ void THNN_(MultiscaleLSTM_backward)(
   THCTensor_(zero)(state, gradHR);
   THCTensor_(zero)(state, gradGates);
   THCTensor_(zero)(state, gradCellOutput);
-  THCTensor_(zero)(state, gradLnBias);
-  THCTensor_(zero)(state, gradLnGain);
 
   // LN tensors
   THCTensor *xW_gain = THCTensor_(new)(state);
