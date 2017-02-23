@@ -247,7 +247,7 @@ __global__ void gradLayerNormalization(int batchSize, int dim,
   int offset = index % dim;
   T eps = ScalarConvert<float, T>::to(1e-5);
 
-  T before = gradOutput[index];
+  // T before = gradOutput[index];
   gradInput[index] = (gain[offset] * gradOutput[index] - gradOutput_sum[example] - input[index]) / (sigma[example] + eps);
   // printf("%f = (%f * %f - %f) - %f / (%f + %f)\n", gradInput[index], gain[offset], before, gradOutput_sum[example], input[index], sigma[example], eps);
 }
