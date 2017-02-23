@@ -238,7 +238,7 @@ __global__ void layerNormalizationWithBias(int batchSize, int dim,
 
 template <typename T>
 __global__ void gradLayerNormalization(int batchSize, int dim,
-                                       T* gradOutput_sum, T* tmp_sum,
+                                       T* gradOutput_sum,
                                        T* input, T* gradOutput, T* gradInput,
                                        T* sigma, T* gain) {
   int index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -248,8 +248,8 @@ __global__ void gradLayerNormalization(int batchSize, int dim,
   T eps = ScalarConvert<float, T>::to(1e-5);
 
   T before = gradOutput[index];
-  gradInput[index] = (gain[offset] * gradOutput[index] - gradOutput_sum[example]) / (sigma[example] + eps) - (input[index] - tmp_sum[example]) / sigma[example];
-  printf("%f = (%f * %f - %f) / (%f + %f) - (%f - %f) / %f\n", gradInput[index], gain[offset], before, gradOutput_sum[example], sigma[example], eps, input[index], tmp_sum[example], sigma[example]);
+  gradInput[index] = (gain[offset] * gradOutput[index] - gradOutput_sum[example] - input[index]) / (sigma[example] + eps);
+  // printf("%f = (%f * %f - %f) - %f / (%f + %f)\n", gradInput[index], gain[offset], before, gradOutput_sum[example], input[index], sigma[example], eps);
 }
 
 #include "generic/MultiscaleLSTM.cu"

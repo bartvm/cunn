@@ -51,7 +51,6 @@ def ln(x, axis, i, j):
 xW = input.dot(W)
 xW_ln = ln(xW, 1, 0, 4)
 hR = tensor.zeros((seqLength, batchSize, 4 * hiddenSize))
-hR_ = hR
 hR = tensor.inc_subtensor(hR[0], output[0].dot(R))
 gates = tensor.zeros((totalInputs, 4 * hiddenSize))
 gates = tensor.set_subtensor(gates[0], xW_ln[0] + hR[0, 0] + b)
@@ -70,6 +69,7 @@ cellOutput = tensor.set_subtensor(cellOutput[1], ln(cellOutput[1], 1, 8, 9))
 output = tensor.set_subtensor(output[1], tensor.tanh(cellOutput[1]) * tensor.nnet.sigmoid(outputGates[0]))
 output_ = output
 hR = tensor.inc_subtensor(hR[1], output[1].dot(R))
+hR_ = hR
 hR_ln = tensor.set_subtensor(hR[1], ln(hR[1], 1, 4, 8))
 
 gates = tensor.set_subtensor(gates[3], xW_ln[3] + hR_ln[1, 0] + b)
