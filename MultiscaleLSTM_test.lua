@@ -13,6 +13,8 @@ m = nn.MultiscaleLSTM(batchSize, inputSize, hiddenSize)
 m.inputWeight:copy(torch.Tensor{0.330683768, 0.655926347, 0.475718617, 0.123243622, 0.633974314, 0.909508169, 0.172109187, 0.573160887, 0.587634325, 0.00642378349, 0.419762284, 0.664884865, 0.995248556, 0.625612378, 0.87671113, 0.437151968, 0.121769592, 0.851266503, 0.232840911, 0.762105942, 0.28621015, 0.409843385, 0.0413793214, 0.464297682})
 m.recurrentWeight:copy(torch.Tensor{0.343660146, 0.763680756, 0.770699918, 0.213859662, 0.449855685, 0.167803735, 0.190994456, 0.510802507, 0.619526386, 0.102920979, 0.58286047, 0.706834376, 0.647269726, 0.833611488, 0.125027329, 0.753009796})
 m.bias:copy(torch.Tensor{0.715777934, 0.973472238, 0.17162253, 0.66155535, 0.124767587, 0.752138913, 0.725227118, 0.987443984})
+m.lnGain:copy(torch.Tensor{0.104775222145, 0.836851796205, 0.301599609992, 0.893472348341, 0.13091611897, 0.884358023, 0.337557848392, 0.714833051434, 0.40658445812, 0.885005045916, 0.698824328285, 0.696169963234, 0.387402091298, 0.0518384984549, 0.519534290615, 0.105123245401, 0.201343546354, 0.305859359918})
+m.lnBias:copy(torch.Tensor{0.2, 0.3})
 
 m = m:cuda()
 
@@ -62,6 +64,42 @@ print('gradLnGain', m.gradLnGain)
 print('gradParameters', dp)
 -- print('numOutArcs', m.numOutArcs)
 -- print('normalizingConstants', m.normalizingConstants)
+
+m:zeroGradParameters()
+
+-- Run forward prop
+m:updateOutput({input, targets, origins, batches})
+
+-- Run backward prop
+gradOutput = torch.ones(seqLength + 1, batchSize, hiddenSize):cuda()
+m:backward({input, targets, origins, batches}, gradOutput)
+
+-- Print results and buffers for inspection
+-- print('inputWeight', m.inputWeight)
+-- print('recurrentWeight', m.recurrentWeight)
+-- print('bias', m.bias)
+print('xW', m._xW)
+print('hR', m._hR)
+print('output', m.output)
+print('cellOutput', m.cellOutput)
+print('gradCellOutput', m.gradCellOutput)
+print('gradOutput', gradOutput)
+print('gates', m._gates)
+print('normalizingConstants', m.normalizingConstants)
+print('xW_sigma', m._xW_sigma)
+print('hR_sigma', m._hR_sigma)
+print('cellOutput_sigma', m._cellOutput_sigma)
+-- print('outputGates', m._outputGates)
+print('gradOutputGates', m._gradOutputGates)
+print('gradGates', m._gradGates)
+print('gradBias', m.gradBias)
+print('gradHR', m._gradHR)
+print('gradInput', m.gradInput)
+print('gradInputWeight', m.gradInputWeight)
+print('gradRecurrentWeight', m.gradRecurrentWeight)
+print('gradLnBias', m.gradLnBias)
+print('gradLnGain', m.gradLnGain)
+print('gradParameters', dp)
 
 -- Criterion stuff
 

@@ -247,11 +247,9 @@ __global__ void gradLayerNormalization(int batchSize, int dim,
   int offset = index % dim;
   T eps = ScalarConvert<float, T>::to(1e-5);
 
-  T dim_T = ScalarConvert<int, T>::to(dim);
-
   T before = gradOutput[index];
-  gradInput[index] = dim_T * gain[offset] * gradOutput[index] - gradOutput_sum[example] - input[index] * tmp_sum[example];
-  gradInput[index] /= sigma[example] * dim_T + eps;
+  gradInput[index] = (gain[offset] * gradOutput[index] - gradOutput_sum[example]) / (sigma[example] + eps) - (input[index] - tmp_sum[example]) / sigma[example];
+  printf("%f = (%f * %f - %f) / (%f + %f) - (%f - %f) / %f\n", gradInput[index], gain[offset], before, gradOutput_sum[example], sigma[example], eps, input[index], tmp_sum[example], sigma[example]);
 }
 
 #include "generic/MultiscaleLSTM.cu"
