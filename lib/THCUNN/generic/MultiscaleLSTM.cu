@@ -415,6 +415,7 @@ void THNN_(MultiscaleLSTM_backward)(
     THCTensor_(rawResize)(state, tmp, 2, size, expand_hidden);
     THCTensor_(cmul)(state, tmp2, tmp, cellOutput_t);
     THCTensor_(cdiv)(state, tmp2, tmp2, cellOutput_gain);
+    THCTensor_(rawResize)(state, tmp, 1, size, NULL);
 
     // Bias grad
     THCTensor_(sum)(state, tmp, gradCellOutput_t, 0);
@@ -422,6 +423,7 @@ void THNN_(MultiscaleLSTM_backward)(
 
     // Gain grad
     THCTensor_(cmul)(state, tmp, gradCellOutput_t, cellOutput_t);
+    THCTensor_(cdiv)(state, tmp, tmp, cellOutput_gain);
     THCTensor_(sum)(state, tmp, tmp, 0);
     THCTensor_(cadd)(state, gradcellOutput_gain, gradcellOutput_gain, ScalarConvert<int, real>::to(1), tmp);
 
@@ -487,11 +489,15 @@ void THNN_(MultiscaleLSTM_backward)(
     THCTensor_(rawResize)(state, tmp, 2, size, expand_hidden);
     THCTensor_(cmul)(state, tmp2, tmp, hR_t);
     THCTensor_(cdiv)(state, tmp2, tmp2, hR_gain);
+    THCTensor_(rawResize)(state, tmp, 1, size, NULL);
 
     // Gain grad
-    THCTensor_(cmul)(state, tmp, gradHR_t, hR_t);
-    THCTensor_(sum)(state, tmp, tmp, 0);
-    THCTensor_(cadd)(state, gradHR_gain, gradHR_gain, ScalarConvert<int, real>::to(1), tmp);
+    if (t > 0) {
+      THCTensor_(cmul)(state, tmp, gradHR_t, hR_t);
+      THCTensor_(cdiv)(state, tmp, tmp, hR_gain);
+      THCTensor_(sum)(state, tmp, tmp, 0);
+      THCTensor_(cadd)(state, gradHR_gain, gradHR_gain, ScalarConvert<int, real>::to(1), tmp);
+    }
 
     THCTensor_(select)(state, hR_sigma_t, hR_sigma, 0, t);
     nThreads = batchSize * 4 * hiddenSize;
@@ -575,9 +581,11 @@ void THNN_(MultiscaleLSTM_backward)(
   THCTensor_(rawResize)(state, tmp, 2, size, expand_hidden);
   THCTensor_(cmul)(state, tmp2, tmp, xW);
   THCTensor_(cdiv)(state, tmp2, tmp2, xW_gain);
+  THCTensor_(rawResize)(state, tmp, 1, size, NULL);
 
   // Gain grad
   THCTensor_(cmul)(state, tmp, gradGates, xW);
+  THCTensor_(cdiv)(state, tmp, tmp, xW_gain);
   THCTensor_(sum)(state, tmp, tmp, 0);
   THCTensor_(cadd)(state, gradXW_gain, gradXW_gain, ScalarConvert<int, real>::to(1), tmp);
 
